@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 **Renamed to Topo** (was MT_Zenith)
+- New logo: a contour map with a climbing route and a summit flag (a "topo" is a climber's route diagram).
+- Each zip now carries an `everest.yaml` (`Topo`, with the release version) so Everest, Olympus and mod databases recognise the download. Topo is still a standalone tool: unzip it outside `Celeste/Mods`; Everest loads nothing from it.
 - The exe is now `Topo.exe` and the downloads are `Topo-<ver>-…zip` / `Topo-AI-<ver>-…zip`. Delete the old `MT_Zenith.exe` after unzipping.
 - Settings, presets and custom PCG models are copied from `%APPDATA%\MT_Zenith` to `%APPDATA%\Topo` on first run; the old folder is left in place.
 - A mod's recorded credits are now saved as `Topo.credits.json`; an existing `MT_Zenith.credits.json` is still read.

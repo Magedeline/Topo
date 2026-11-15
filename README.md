@@ -1,5 +1,7 @@
 # Topo
 
+<img src="Topo.png" alt="Topo logo" width="96">
+
 Topo is a map viewer and editor for Celeste `.bin` maps, made for the **CEL (Desolo Zantas)** mod.
 It uses the same Lönn plugins, autotiler and decals as the game, links live to a running Celeste and has a PCG room generator.
 
@@ -25,7 +27,7 @@ Both editions share the same editor, PCG, live link, asset credits and settings 
 
 ## Install
 
-1. Unzip anywhere and run `Topo.exe`.
+1. Unzip anywhere and run `Topo.exe`. Topo is a standalone tool, not a mod; the `everest.yaml` in the zip only names and versions the download for Everest, Olympus and mod databases.
 2. Topo looks for Celeste in this order:
    1. The folders above the exe. For example, a source build in `Celeste/Mods/CEL/Tools/CELMapViewer`.
    2. `CELESTE_DIR`.

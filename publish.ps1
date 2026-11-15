@@ -61,8 +61,11 @@ foreach ($e in $editions) {
 foreach ($f in $flavors) {
 	$stage = Join-Path $dist ('stage\' + $f.Name)
 	Write-Host "==> $($f.Name)"
-	# --no-incremental: both editions share obj/, so never reuse objects compiled for the other edition.
-	dotnet publish $proj -c Release -r win-x64 --self-contained $f.SelfContained --no-incremental `
+	# Both editions share obj/, so never reuse objects compiled for the other edition
+	# (dotnet publish has no --no-incremental switch; clearing the Release objects does the same).
+	$objRelease = Join-Path $here 'obj\Release'
+	if (Test-Path $objRelease) { Remove-Item $objRelease -Recurse -Force }
+	dotnet publish $proj -c Release -r win-x64 --self-contained $f.SelfContained `
 		-p:PublishSingleFile=true -p:Version=$Version -p:TopoAi=$($f.Ai) -o $stage -nologo
 	if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($f.Name)" }
 
@@ -71,6 +74,9 @@ foreach ($f in $flavors) {
 	Copy-Item (Join-Path $here 'Topo.png') $stage
 	Copy-Item (Join-Path $here 'LICENSE') (Join-Path $stage 'LICENSE.txt')
 	Copy-Item (Join-Path $here 'THIRD-PARTY-NOTICES.txt') $stage
+	# everest.yaml with this release's version, so Everest/Olympus/mod databases recognise the zip.
+	(Get-Content (Join-Path $here 'everest.yaml')) -replace '^(\s*Version:\s*).*$', "`${1}$Version" |
+		Set-Content (Join-Path $stage 'everest.yaml') -Encoding ascii
 	if (Test-Path $changelog) { Copy-Item $changelog (Join-Path $stage 'CHANGELOG.txt') }
 
 	if ($SelfTest) {
@@ -83,7 +89,7 @@ foreach ($f in $flavors) {
 }
 Remove-Item (Join-Path $dist 'stage') -Recurse -Force
 
-$sums = Get-ChildItem $dist -Filter *.zip | ForEach-Object {
+$sums = Get-ChildItem $dist -Filter 'Topo-*.zip' | ForEach-Object {
 	'{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
 }
 $sums | Set-Content (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
@@ -130,7 +136,7 @@ Install
 The plain zip is self-contained; the "fxdependent" zip needs the .NET 8 Desktop Runtime.
 Optional (AI edition only): ffmpeg on PATH for video frames / audio decoding.
 
-This is a tool, not a mod: do not put it in Celeste/Mods.
+This is a tool, not a mod: unzip it outside Celeste/Mods. The everest.yaml in the zip only names and versions the download; Everest loads nothing from it.
 "@
 $gb | Set-Content (Join-Path $dist 'gamebanana.txt') -Encoding utf8
 

@@ -1,0 +1,5 @@
+# Topo is a standalone map editor, not a Celeste mod: it contains no code or content that Everest loads.
+# This file only lets Everest, Olympus and mod databases recognise the download by name and version.
+# publish.ps1 writes the release version into the copy that goes in each zip.
+- Name: Topo
+  Version: 1.2.0
