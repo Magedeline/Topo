@@ -92,10 +92,12 @@ public sealed partial class MainForm
         if (_map != null)
         {
             int rooms = MapModel.Levels(_map).Children.Count;
-            parts.Add($"{rooms} room(s). Build with build_room/batch/connect_rooms, verify with analyze_room and analyze_map, keep design_notes.");
+            parts.Add($"{rooms} room(s). Build with build_room/batch/connect_rooms, verify with analyze_room and analyze_map, keep design_notes. " +
+                      "view_map target='view' shows exactly what the user sees in the editor right now.");
         }
         if (_settings.AiReadOnly) parts.Add("The map is read-only for AI: do not try to edit it.");
         try { if (_mapTools?.NotesSummary() is { } notes) parts.Add(notes); } catch (Exception) { /* notes are optional */ }
+        try { if (PlacementMemory.Summary() is { } memory) parts.Add(memory); } catch (Exception) { /* memory is optional */ }
         return string.Join(" ", parts);
     }
 
@@ -219,6 +221,39 @@ public sealed partial class MainForm
             if (f._undo.Count == 0) return false;
             f.Undo();
             return true;
+        }
+
+        public EditorView? View
+        {
+            get
+            {
+                var c = f._canvas;
+                var sel = c.SelectedItems.Where(s => s.El != null).Select(s => (s.Room.Name, s.Kind, s.El!)).ToList();
+                return new EditorView(c.ViewWorldBounds, c.Zoom, c.Tool.ToString(), c.ActiveLayer.ToString(), c.ShowEntities, c.ShowTriggers, c.ShowBg,
+                                      c.Selected?.Room.Name, sel, c.GameRoom, c.Tool == Tool.Place ? c.PlaceItem?.Display : null);
+            }
+        }
+
+        public Bitmap RenderWorld(RectangleF area, ScreenshotOptions options)
+        {
+            // The canvas finishes the picture on the UI thread, so waiting for it there (a step inside batch) would never return.
+            if (!f.InvokeRequired) throw new ToolException("The editor view can't be rendered inside batch; call the tool on its own.");
+            var task = Invoke(() => f._canvas.RenderScreenshotAsync(area, f._canvas.Rooms.Where(r => area.IntersectsWith(r.Bounds)).ToList(), options));
+            return task.GetAwaiter().GetResult();
+        }
+
+        public void Reveal(BinElement level, IReadOnlyList<BinElement> items)
+        {
+            if (f._canvas.Rooms.FirstOrDefault(r => r.El == level) is not { } room) return;
+            var picked = new List<Selection>();
+            foreach (var el in items)
+            {
+                if (room.EntitiesEl.Children.Contains(el)) picked.Add(new Selection(room, el, false));
+                else if (room.TriggersEl.Children.Contains(el)) picked.Add(new Selection(room, el, true));
+                else if (room.El.Child("fgdecals")?.Children.Contains(el) == true || room.El.Child("bgdecals")?.Children.Contains(el) == true)
+                    picked.Add(new Selection(room, el, false, true));
+            }
+            if (picked.Count > 0) f._canvas.SelectMany(picked);
         }
 
         public void Log(string message)

@@ -144,7 +144,7 @@ public sealed class AssetDriveForm : Form
         if (a.Template != null) s += "\r\nTileset template: " + a.Template;
         if (a.Notes != null) s += "\r\n\r\nNotes: " + a.Notes.Replace("\n", "\r\n");
         if (readme != null) s += "\r\n\r\nReadme:\r\n" + readme.Replace("\r\n", "\n").Replace("\n", "\r\n");
-        s += a.CreditOptional ? "\r\n\r\nThe author says no credit is needed; MT_Zenith still records it." : "\r\n\r\nCredit the author when you use this.";
+        s += a.CreditOptional ? "\r\n\r\nThe author says no credit is needed; Topo still records it." : "\r\n\r\nCredit the author when you use this.";
         return s;
     }
 

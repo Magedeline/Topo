@@ -8,18 +8,41 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Run on a newer runtime when only that is installed (e.g. VS-provided .NET 10). -->
     <RollForward>Major</RollForward>
-    <AssemblyName>MT_Zenith</AssemblyName>
-    <Product>MT_Zenith</Product>
+    <AssemblyName>Topo</AssemblyName>
+    <Product>Topo</Product>
     <Description>Map viewer/editor with AI (MCP/ACP) tools for the CEL (Desolo Zantas) Celeste mod</Description>
     <Version>1.1.0</Version>
-    <ApplicationIcon>MT_Zenith.ico</ApplicationIcon>
+    <ApplicationIcon>Topo.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);dist/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!--
+    Editions. The Celeste modding community is wary of AI, so the AI features are a separate build:
+      dotnet build -p:TopoAi=false   standard edition: no MCP server, no agent panel, no AI code in the exe
+      dotnet build                     Topo + AI (default for development; same as -p:TopoAi=true)
+    publish.ps1 builds both. Shared analysis code (RoomAnalysis, MapGraph, ReferenceMaps, ToolException)
+    lives in Agent/ but is ordinary editor logic used by PCG, so it is in both editions.
+  -->
+  <PropertyGroup>
+    <TopoAi Condition="'$(TopoAi)' == ''">true</TopoAi>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TopoAi)' == 'true'">
+    <DefineConstants>$(DefineConstants);TOPO_AI</DefineConstants>
+    <Product>Topo + AI</Product>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TopoAi)' != 'true'">
+    <Description>Map viewer/editor for the CEL (Desolo Zantas) Celeste mod</Description>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TopoAi)' != 'true'">
+    <Compile Remove="MainForm.Ai.cs" />
+    <Compile Remove="Agent/AcpClient.cs;Agent/AgentAttachments.cs;Agent/AgentPanel.cs;Agent/IMapHost.cs;Agent/McpServer.cs;Agent/Prompts.cs" />
+    <Compile Remove="Agent/MapTools*.cs;Agent/Media*.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="MoonSharp" Version="2.0.0" />
-    <EmbeddedResource Include="MT_Zenith.ico" LogicalName="MT_Zenith.ico" />
-    <None Include="MT_Zenith.png" />
+    <EmbeddedResource Include="Topo.ico" LogicalName="Topo.ico" />
+    <None Include="Topo.png" />
   </ItemGroup>
 
   <!-- Standalone release build (GitHub / GameBanana): see publish.ps1. -->

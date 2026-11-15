@@ -1,6 +1,6 @@
-name: MT_Zenith release
+name: Topo release
 
-# Builds the standalone MT_Zenith map editor and publishes a GitHub release.
+# Builds the standalone Topo map editor and publishes a GitHub release.
 #   git tag v1.0.0 && git push origin v1.0.0
 # Manual runs build the zips as a workflow artifact, and only publish a release when "release" is ticked.
 # Windows runner: the app is WinForms (net8.0-windows).
@@ -46,7 +46,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT_Zenith-${{ steps.ver.outputs.version }}
+          name: Topo-${{ steps.ver.outputs.version }}
           path: dist/*
 
       - name: Create GitHub release
@@ -58,5 +58,7 @@ jobs:
           $v = '${{ steps.ver.outputs.version }}'
           $tag = "v$v"
           $dist = 'dist'
-          gh release create $tag "$dist/MT_Zenith-$v-win-x64.zip" "$dist/MT_Zenith-$v-win-x64-fxdependent.zip" "$dist/SHA256SUMS.txt" `
-            --title "MT_Zenith $v" --notes-file "$dist/release-notes.md" --target '${{ github.sha }}'
+          $zips = @("Topo-$v-win-x64.zip", "Topo-$v-win-x64-fxdependent.zip",
+                    "Topo-AI-$v-win-x64.zip", "Topo-AI-$v-win-x64-fxdependent.zip") | ForEach-Object { "$dist/$_" }
+          gh release create $tag @zips "$dist/SHA256SUMS.txt" `
+            --title "Topo $v" --notes-file "$dist/release-notes.md" --target '${{ github.sha }}'

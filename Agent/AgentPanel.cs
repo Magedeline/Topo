@@ -402,7 +402,7 @@ public sealed class AgentPanel : UserControl
             _settings.AgentPermissions = PermissionPolicies[_perm.SelectedIndex].Id;
             _settings.Save();
         };
-        _tips.SetToolTip(_perm, "How to answer the agent's permission requests. 'Auto-allow map tools' approves the mt-zenith MCP tools (map edits are undoable) " +
+        _tips.SetToolTip(_perm, "How to answer the agent's permission requests. 'Auto-allow map tools' approves the topo MCP tools (map edits are undoable) " +
                                 "and still asks for file writes and shell commands; 'auto-allow all' approves everything.");
         _strongest.Checked = _settings.AgentMaxEffort;
         _strongest.CheckedChanged += async (_, _) =>

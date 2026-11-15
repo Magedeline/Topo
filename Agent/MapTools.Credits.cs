@@ -9,7 +9,7 @@ public sealed partial class MapTools
     {
         Add("asset_credits", "Who to credit for everything the open map uses: decals, stylegrounds, tilesets and entity/trigger types. " +
             "Installed mods are matched to their GameBanana page and author through Maddie480's mod database (maddie480.ovh); files in the " +
-            "map's own mod use the credits recorded in MT_Zenith.credits.json, and unrecorded ones are matched by name against the Celeste " +
+            "map's own mod use the credits recorded in Topo.credits.json, and unrecorded ones are matched by name against the Celeste " +
             "Community Asset Drive. Returns a ready credits.txt plus a list of assets that still need a credit decision. " +
             "When adding decals or stylegrounds from other mods or the Asset Drive, run this afterwards and tell the user who to credit.", true,
             Props(("refresh", P("boolean", "Re-download Maddie480's databases instead of using the daily cache (default false).")),

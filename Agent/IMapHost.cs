@@ -28,7 +28,23 @@ public interface IMapHost
 
     bool Undo();
     void Log(string message);
+
+    /// <summary>What the user currently looks at in the editor window; null without a window (<c>--mcp</c>).</summary>
+    EditorView? View { get; }
+
+    /// <summary>
+    /// Renders a world rectangle the way the editor canvas draws it (autotiled tiles, decals, entity sprites, triggers).
+    /// Blocks until done; call it OUTSIDE <see cref="Invoke{T}"/>.
+    /// </summary>
+    Bitmap RenderWorld(RectangleF area, ScreenshotOptions options);
+
+    /// <summary>Shows freshly placed items of a room as the editor's selection, so the user sees what was put where.</summary>
+    void Reveal(BinElement level, IReadOnlyList<BinElement> items);
 }
+
+/// <summary>The editor window's camera, tool and selection, as the user sees them.</summary>
+public sealed record EditorView(RectangleF Bounds, float Zoom, string Tool, string Layer, bool ShowEntities, bool ShowTriggers, bool ShowBg,
+                                string? SelectedRoom, IReadOnlyList<(string Room, string Kind, BinElement El)> Selected, string? GameRoom, string? PalettePick);
 
 /// <summary>Map state for the stand-alone <c>--mcp</c> server (no window).</summary>
 public sealed class HeadlessHost : IMapHost
@@ -96,5 +112,26 @@ public sealed class HeadlessHost : IMapHost
         return true;
     }
 
-    public void Log(string message) => Console.Error.WriteLine("[MT_Zenith] " + message);
+    public void Log(string message) => Console.Error.WriteLine("[Topo] " + message);
+
+    public EditorView? View => null;
+
+    public void Reveal(BinElement level, IReadOnlyList<BinElement> items) { }
+
+    private MapCanvas? _canvas;
+
+    public Bitmap RenderWorld(RectangleF area, ScreenshotOptions options)
+    {
+        // The lock is held for the whole render so no edit lands while the canvas reads the rooms on a pool thread.
+        lock (_gate)
+        {
+            if (Map == null) throw new ToolException("No map is open.");
+            WindowsFormsSynchronizationContext.AutoInstall = false; // no message loop here to resume awaits on
+            var canvas = _canvas ??= new MapCanvas();
+            if (canvas.FgTiler != FgTiler) canvas.FgTiler = FgTiler;
+            if (canvas.BgTiler != BgTiler) canvas.BgTiler = BgTiler;
+            var rooms = MapModel.Levels(Map).Children.Select(l => new Room(l)).Where(r => area.IntersectsWith(r.Bounds)).ToList();
+            return Task.Run(() => canvas.RenderScreenshotAsync(area, rooms, options)).GetAwaiter().GetResult();
+        }
+    }
 }

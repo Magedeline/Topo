@@ -49,7 +49,7 @@ public sealed class PcgResult
     public TimeSpan Elapsed;
 }
 
-/// <summary>A trained (custom) MdMC model saved under %APPDATA%\MT_Zenith\pcg_models.</summary>
+/// <summary>A trained (custom) MdMC model saved under %APPDATA%\Topo\pcg_models.</summary>
 public sealed class PcgModelInfo
 {
     public string Name = "";
@@ -100,7 +100,7 @@ public sealed class PcgGenerator
     public static string? FindLoennRoot(string? modDir)
     {
         static bool Ok(string? root) => root != null && File.Exists(Path.Combine(root, "library", "selecte", "level.lua"));
-        foreach (string? env in new[] { Environment.GetEnvironmentVariable("MT_ZENITH_PCGHELPER"), AppSettings.Load().PcgHelperDir })
+        foreach (string? env in new[] { Environment.GetEnvironmentVariable("TOPO_PCGHELPER"), Environment.GetEnvironmentVariable("MT_ZENITH_PCGHELPER"), AppSettings.Load().PcgHelperDir })
             if (env != null)
                 foreach (string c in new[] { env, Path.Combine(env, "Loenn") })
                     if (Ok(c)) return c;

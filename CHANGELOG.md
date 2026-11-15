@@ -1,8 +1,28 @@
 # Changelog
 
+## Unreleased
+
+**Renamed to Topo** (was MT_Zenith)
+- The exe is now `Topo.exe` and the downloads are `Topo-<ver>-…zip` / `Topo-AI-<ver>-…zip`. Delete the old `MT_Zenith.exe` after unzipping.
+- Settings, presets and custom PCG models are copied from `%APPDATA%\MT_Zenith` to `%APPDATA%\Topo` on first run; the old folder is left in place.
+- A mod's recorded credits are now saved as `Topo.credits.json`; an existing `MT_Zenith.credits.json` is still read.
+- The MCP server is now called `topo` (was `mt-zenith`): re-add it in your AI client with *AI ▸ Copy MCP client config*. The port is unchanged.
+- The `MT_ZENITH_PCGHELPER` environment variable is now `TOPO_PCGHELPER` (the old name still works); the build switch is `-p:TopoAi=false`.
+
+**Two editions**
+- **Topo** (main download) now has no AI features: the MCP server, agent panel and AI media tools aren't compiled into it at all.
+- **Topo + AI** is a separate, optional download with the AI tools. The window title shows which edition you're running.
+- `publish.ps1` and the release workflow build both editions (`Topo-<ver>-…zip` and `Topo-AI-<ver>-…zip`). Build the standard edition from source with `dotnet build -p:TopoAi=false`.
+
+**Agent tools (AI edition)**
+- `view_map`: the agent sees the map as the editor canvas draws it (autotiled tiles, decals, entity sprites, triggers, room names): the whole map, a room with its surroundings, an area, or exactly what you are looking at in the window with your selection outlined. `editor_state` reports the camera, tool, layer and selection.
+- Hand-crafted placement: `add_entity` and `build_room` entities take `rest` (floor, ceiling, left, right) to set an item down on the surface like placing it by hand, and `snap` for the editor's 8px grid. Items the agent places show up selected in the editor.
+- `placement_memory`: what the agent picked and placed is remembered across maps and sessions (`%APPDATA%\Topo\ai_placements.json`), with the surface, attributes and its own notes; the agent gets a digest every turn.
+- Preset groups for the agent: `list_presets`, `save_preset`, `place_preset`, `delete_preset`, sharing the Presets menu's `presets.json`. Presets saved by another running Topo (or an `--mcp` server) show up without a restart.
+
 ## 1.1.0
 
-Update from 1.0.0: replace `MT_Zenith.exe` with the new one (or unzip over the old folder). Settings, caches and PCG models in `%APPDATA%\MT_Zenith` are kept.
+Released as MT_Zenith. Update from 1.0.0: replace `MT_Zenith.exe` with the new one (or unzip over the old folder). Settings, caches and PCG models in `%APPDATA%\MT_Zenith` are kept.
 
 **New**
 - **Room properties dialog** (Ctrl+R, also used for *New room*): camera offset, colour, wind, flags, checkpoint, music and ambience.

@@ -57,7 +57,9 @@ public sealed partial class MainForm : Form
         BuildMenu();
         BuildLayout();
         WireEvents();
+#if TOPO_AI
         InitAi();
+#endif
 
         _poll.Tick += async (_, _) => await PollGameAsync();
         _poll.Start();
@@ -168,7 +170,10 @@ public sealed partial class MainForm : Form
         assets.DropDownItems.Add(new ToolStripMenuItem("Open &maddie480.ovh", null, (_, _) =>
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(MaddieDb.Base + "/celeste") { UseShellExecute = true })));
 
-        menu.Items.AddRange(new ToolStripItem[] { file, edit, roomMenu, view, BuildProjectMenu(), BuildPresetsMenu(), BuildScriptsMenu(), game, pcg, assets, BuildAiMenu() });
+        menu.Items.AddRange(new ToolStripItem[] { file, edit, roomMenu, view, BuildProjectMenu(), BuildPresetsMenu(), BuildScriptsMenu(), game, pcg, assets });
+#if TOPO_AI
+        menu.Items.Add(BuildAiMenu());
+#endif
         MainMenuStrip = menu;
         Controls.Add(menu);
     }
@@ -234,7 +239,9 @@ public sealed partial class MainForm : Form
         _tabs.TabPages.Add(propsPage);
         _tabs.TabPages.Add(palettePage);
         _tabs.TabPages.Add(BuildDecalTab());
+#if TOPO_AI
         _tabs.TabPages.Add(BuildAiTab());
+#endif
 
         var rightSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
         rightSplit.Panel1.Controls.Add(_tabs);

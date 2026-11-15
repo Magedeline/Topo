@@ -76,7 +76,7 @@ public sealed class GameLink
     private static readonly Lazy<string?> _modDir = new(LocateMod);
 
     /// <summary>
-    /// Celeste install root. Built from source, MT_Zenith lives in Celeste/Mods/CEL/Tools/CELMapViewer/bin/...;
+    /// Celeste install root. Built from source, Topo lives in Celeste/Mods/CEL/Tools/CELMapViewer/bin/...;
     /// a downloaded release falls back to CELESTE_DIR, the "Set Celeste folder" setting, Steam, Olympus and common paths.
     /// </summary>
     public static string? FindCelesteDir() => _celesteDir.Value;

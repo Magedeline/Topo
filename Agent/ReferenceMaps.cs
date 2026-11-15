@@ -241,7 +241,7 @@ public static class ReferenceMaps
         return st;
     }
 
-    // ---- stats cache (memory + %APPDATA%\MT_Zenith\refprofiles.json) ----
+    // ---- stats cache (memory + %APPDATA%\Topo\refprofiles.json) ----
 
     private static ConcurrentDictionary<string, MapStats>? _cache;
     private static string CachePath => Path.Combine(AppInfo.DataDir, "refprofiles.json");

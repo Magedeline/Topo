@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace CELMapViewer;
 
-/// <summary>Small persisted preferences (recent files, view toggles) in %APPDATA%\MT_Zenith\settings.json.</summary>
+/// <summary>Small persisted preferences (recent files, view toggles) in %APPDATA%\Topo\settings.json.</summary>
 public sealed class AppSettings
 {
     public List<string> RecentFiles { get; set; } = new();
@@ -36,7 +36,7 @@ public sealed class AppSettings
     public bool? AgentFast { get; set; }
     public bool? AgentThinking { get; set; }
     public bool ShowThoughts { get; set; } = true;
-    /// <summary>How the agent panel answers ACP permission requests: ask | map (auto-allow MT_Zenith map tools) | all.</summary>
+    /// <summary>How the agent panel answers ACP permission requests: ask | map (auto-allow Topo map tools) | all.</summary>
     public string AgentPermissions { get; set; } = "ask";
     /// <summary>Strongest-effort mode: max model/effort, autonomy directive in every prompt, auto-continue on turn limits.</summary>
     public bool AgentMaxEffort { get; set; }

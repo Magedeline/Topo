@@ -1,5 +1,5 @@
-MT_Zenith includes or uses the following third-party software and content.
-MT_Zenith's own license is in LICENSE (MIT).
+Topo includes or uses the following third-party software and content.
+Topo's own license is in LICENSE (MIT).
 
 ------------------------------------------------------------------------------
 MoonSharp 2.0.0 (bundled)
@@ -43,10 +43,10 @@ Copyright (c) .NET Foundation and Contributors. Licensed under the MIT License.
 Not included, used at run time
 ------------------------------------------------------------------------------
 * Celeste game assets are read from your own Celeste install and are not
-  distributed with MT_Zenith. Celeste (c) Maddy Makes Games / Extremely OK Games.
+  distributed with Topo. Celeste (c) Maddy Makes Games / Extremely OK Games.
 * Mod assets and Lönn plugins are read from your own Mods folder and belong to
   their authors.
 * Mod and asset data is downloaded from Maddie480's services
   (https://maddie480.ovh): the GameBanana mod database and the Celeste
   Community Asset Drive. Community assets belong to their creators; follow each
-  creator's terms and credit them (MT_Zenith records and lists those credits).
+  creator's terms and credit them (Topo records and lists those credits).

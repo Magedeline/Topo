@@ -61,7 +61,7 @@ public sealed partial class MapTools
                   ("ops", ArrayP("Draw ops applied after fill/fg. " + OpsHelp, new JsonObject { ["type"] = "object" })),
                   ("exits", ArrayP("Openings to carve: {side, from, to, depth?} in cells.", new JsonObject { ["type"] = "object" })),
                   ("spawn", P("object", "{x,y} room-local px of the player spawn; omit for automatic placement; false for none.")),
-                  ("entities", ArrayP("Entities: {name, x, y, attrs?, nodes?, placement?}.", new JsonObject { ["type"] = "object" })),
+                  ("entities", ArrayP("Entities: {name, x, y, attrs?, nodes?, placement?, rest?('floor'|'ceiling'|'left'|'right': set it down on that surface from x,y), snap?}.", new JsonObject { ["type"] = "object" })),
                   ("triggers", ArrayP("Triggers: {name, x, y, width?, height?, attrs?, nodes?}.", new JsonObject { ["type"] = "object" })),
                   ("attrs", AttrsP),
                   ("analyze", P("boolean", "Append an analyze_room report (default true)."))), new[] { "name" }, BuildRoom);
@@ -432,8 +432,11 @@ public sealed partial class MapTools
                         if (trig && !s.ContainsKey("trigger")) s["trigger"] = true;
                         var el = CreateEntity(map, s, id++, out bool isTrigger, out bool known);
                         if (!known) unknownCount++;
+                        var (surface, _) = HandPlace(room, el, isTrigger, s);
                         (isTrigger ? room.TriggersEl : room.EntitiesEl).Children.Add(el);
+                        Remember(el, isTrigger, s, surface);
                     }
+            PlacementMemory.Save();
             if (unknownCount > 0) notes.Add($"{unknownCount} entity type(s) unknown to the installed Lönn plugins (placed without defaults)");
 
             bool wantSpawn = a["spawn"] is not JsonValue sv || !(sv.TryGetValue(out bool sb) && !sb);

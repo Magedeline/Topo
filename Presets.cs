@@ -5,7 +5,7 @@ namespace CELMapViewer;
 
 /// <summary>
 /// Saved entity/trigger presets and preset groups (several entities, triggers and decals placed together
-/// with their relative positions), kept in %APPDATA%\MT_Zenith\presets.json.
+/// with their relative positions), kept in %APPDATA%\Topo\presets.json.
 /// </summary>
 public sealed class Preset
 {
@@ -20,10 +20,35 @@ public sealed class Preset
 
 public static class PresetStore
 {
-    private static string FilePath => Path.Combine(AppInfo.DataDir, "presets.json");
+    private static string? _file;
+    private static DateTime _stamp;
     private static List<Preset>? _all;
 
-    public static List<Preset> All => _all ??= Load();
+    /// <summary>The presets file; set it to keep presets elsewhere (tests), null for the default.</summary>
+    public static string? FilePathOverride
+    {
+        get => _file;
+        set { _file = value; _all = null; }
+    }
+
+    public static string FilePath => _file ?? Path.Combine(AppInfo.DataDir, "presets.json");
+
+    /// <summary>All presets, re-read when another Topo (the window, or an <c>--mcp</c> server) changed the file.</summary>
+    public static List<Preset> All
+    {
+        get
+        {
+            DateTime stamp = Stamp();
+            if (_all == null || stamp != _stamp) { _all = Load(); _stamp = stamp; }
+            return _all;
+        }
+    }
+
+    private static DateTime Stamp()
+    {
+        try { return File.Exists(FilePath) ? File.GetLastWriteTimeUtc(FilePath) : default; }
+        catch (IOException) { return default; }
+    }
 
     private static List<Preset> Load()
     {
@@ -39,8 +64,10 @@ public static class PresetStore
     {
         try
         {
-            Directory.CreateDirectory(AppInfo.DataDir);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(All, new JsonSerializerOptions { WriteIndented = true }));
+            var all = All;
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = true }));
+            _stamp = Stamp();
         }
         catch { /* not critical */ }
     }
@@ -69,7 +96,7 @@ public static class PresetStore
 
     public static List<(string Layer, BinElement El)>? Items(Preset p) => ItemClipboard.Deserialize(p.Items);
 
-    private static void Shift(BinElement el, float dx, float dy)
+    public static void Shift(BinElement el, float dx, float dy)
     {
         MapCanvas.SetNum(el, "x", el.Num("x") + dx);
         MapCanvas.SetNum(el, "y", el.Num("y") + dy);

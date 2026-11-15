@@ -3,7 +3,7 @@
 namespace CELMapViewer;
 
 /// <summary>
-/// <c>MT_Zenith --selftest [mapsDir] [pcgLoennRoot]</c>: checks that every .bin round-trips
+/// <c>Topo --selftest [mapsDir] [pcgLoennRoot]</c>: checks that every .bin round-trips
 /// byte-for-byte and that PCGHelper generation imports into a map that re-loads. Output goes to stdout.
 /// </summary>
 internal static class SelfTest
@@ -160,6 +160,7 @@ internal static class SelfTest
         return failed;
     }
 
+#if TOPO_AI
     /// <summary>Media analysis used by the AI tools/attachments: WAV decode + pitch, figures, image compare, ffmpeg video frames.</summary>
     private static int MediaTest()
     {
@@ -229,6 +230,7 @@ internal static class SelfTest
         finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
         return failed;
     }
+#endif
 
     /// <summary>Room properties defaults, fillers, project manager, presets, Ahorn plugins and third-party Lönn scripts.</summary>
     private static int EditorToolsTest()
@@ -338,6 +340,7 @@ internal static class SelfTest
         return failed;
     }
 
+#if TOPO_AI
     /// <summary>The design tools: movement-model reachability, map connectivity, build_room/draw_tiles/connect_rooms/batch/design_notes through the tool layer.</summary>
     private static int DesignTest()
     {
@@ -347,6 +350,11 @@ internal static class SelfTest
             Console.WriteLine($"{name}: {(ok ? "ok" : "FAILED" + (detail != null ? " " + detail : ""))}");
             if (!ok) failed++;
         }
+        // the agent's placement memory and the presets go to a scratch folder, not the user's %APPDATA%
+        string scratch = Path.Combine(Path.GetTempPath(), "mtz_design_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(scratch);
+        PlacementMemory.FilePathOverride = Path.Combine(scratch, "ai_placements.json");
+        PresetStore.FilePathOverride = Path.Combine(scratch, "presets.json");
         try
         {
             var map = new MapBin { Root = new BinElement("Map") };
@@ -413,10 +421,65 @@ internal static class SelfTest
             // overlay render
             var ov = Call("analyze_room", """{"room":"b","render":true,"scale":1}""");
             Check("analyze_room render", ov.Content.Any(c => c?["type"]?.ToString() == "image"));
+
+            // hand placement: spikes dropped from mid-air land on the floor (row 20 = y 160), a block's bottom edge does, and a wall strip slides onto the wall
+            Room RoomOf(string n) => MapModel.Levels(map).Children.Select(l => new Room(l)).First(r => r.Name == n);
+            BinElement Last(string n) => RoomOf(n).EntitiesEl.Children[^1];
+            var p1 = Call("add_entity", """{"room":"c","name":"spikesUp","x":64,"y":60,"rest":"floor","attrs":{"width":24}}""");
+            int spikeId = Last("c").Int("id");
+            bool restFloor = !p1.IsError && Last("c").Int("y") == 160 && Last("c").Int("x") == 64;
+            var p2 = Call("add_entity", """{"room":"c","name":"testBlock","x":96,"y":43,"snap":true,"rest":"floor","attrs":{"width":16,"height":16}}""");
+            int blockId = Last("c").Int("id");
+            restFloor &= !p2.IsError && Last("c").Int("y") == 144 && Last("c").Int("x") == 96;
+            var p3 = Call("add_entity", """{"room":"c","name":"spikesRight","x":80,"y":120,"rest":"left","attrs":{"height":16}}""");
+            restFloor &= !p3.IsError && Last("c").Int("x") == 8;
+            var p4 = Call("add_entity", """{"room":"c","name":"spikesDown","x":64,"y":100,"rest":"ceiling","attrs":{"width":16}}""");
+            restFloor &= !p4.IsError && Last("c").Int("y") == 8;
+            Check("add_entity rest (floor, block, wall, ceiling)", restFloor, Text(p1) + " | " + Text(p2) + " | " + Text(p3) + " | " + Text(p4));
+
+            // every pick is remembered with its surface, notes stick, and the digest for the agent's context mentions it
+            Call("placement_memory", """{"action":"note","type":"spikesUp","text":"keep 3 tiles of run-up before a strip"}""");
+            Call("placement_memory", """{"action":"note","text":"the user likes wide floors"}""");
+            var mem = Call("placement_memory", """{"action":"recall","query":"spikes"}""");
+            string tmem = Text(mem);
+            Check("placement_memory records picks and notes", tmem.Contains("\"type\":\"spikesUp\"") && tmem.Contains("\"count\":2") && tmem.Contains("\"floor\":1") && tmem.Contains("run-up") && tmem.Contains("\"ceiling\":1")
+                && File.Exists(PlacementMemory.FilePath) && PlacementMemory.Summary()?.Contains("spikesUp") == true
+                && Text(Call("placement_memory", """{"action":"recall"}""")).Contains("wide floors"), tmem);
+
+            // preset group: saved from ids, listed, placed elsewhere with the same relative layout and fresh ids
+            var sp = Call("save_preset", $$"""{"name":"spike step","room":"c","ids":[{{spikeId}},{{blockId}}]}""");
+            var sp2 = Call("save_preset", $$"""{"name":"spike step","room":"c","ids":[{{spikeId}}]}""");
+            var lp = Call("list_presets", """{"query":"spike"}""");
+            int beforeCount = RoomOf("a").EntitiesEl.Children.Count;
+            var pp = Call("place_preset", """{"name":"spike step","room":"a","x":106,"y":50}""");
+            var ea = RoomOf("a").EntitiesEl.Children;
+            bool presetOk = !sp.IsError && sp2.IsError && Text(lp).Contains("\"name\":\"spike step\"") && Text(lp).Contains("\"count\":2") && !pp.IsError
+                && ea.Count == beforeCount + 2 && ea[^2].Name == "spikesUp" && ea[^2].Int("x") == 104 && ea[^2].Int("y") == 64
+                && ea[^1].Name == "testBlock" && ea[^1].Int("x") == 136 && ea[^1].Int("y") == 48 && ea[^1].Int("id") != blockId;
+            var area = Call("save_preset", """{"name":"corner","room":"c","area":{"x":56,"y":130,"width":64,"height":32}}""");
+            presetOk &= !area.IsError && Text(area).Contains("2 item(s)");
+            var del = Call("delete_preset", """{"name":"corner"}""");
+            presetOk &= !del.IsError && !Text(Call("list_presets", "{}")).Contains("corner") && PresetStore.All.Count == 1;
+            Check("preset groups (save, list, place, delete)", presetOk, Text(sp) + " | " + Text(lp) + " | " + Text(pp) + " | " + Text(area));
+
+            // the editor-style picture: whole map and one room, plus the headless editor state
+            var vm = Call("view_map", """{"max_size":800}""");
+            var vr = Call("view_map", """{"room":"c","margin":32}""");
+            var es = Call("editor_state", "{}");
+            var vv = Call("view_map", """{"target":"view"}""");
+            Check("view_map (map, room) and editor_state", !vm.IsError && vm.Content.Any(c => c?["type"]?.ToString() == "image") && Text(vm).Contains("\"name\":\"a_m\"")
+                && !vr.IsError && Text(vr).Contains("768x496") && Text(es).Contains("\"window\":false") && vv.IsError, Text(vm) + " | " + Text(vr) + " | " + Text(vv));
         }
         catch (Exception ex) { failed++; Console.WriteLine("DESIGN ERROR: " + ex); }
+        finally
+        {
+            PlacementMemory.FilePathOverride = null;
+            PresetStore.FilePathOverride = null;
+            try { Directory.Delete(scratch, true); } catch (IOException) { }
+        }
         return failed;
     }
+#endif
 
     public static int Run(string[] args)
     {
@@ -445,8 +508,12 @@ internal static class SelfTest
         }
         Console.WriteLine($"round-trip: {ok} identical, {failed} failed");
         failed += AssetTest(maps);
+#if TOPO_AI
         failed += MediaTest();
         failed += DesignTest();
+#else
+        Console.WriteLine("standard edition: AI media and agent-tool tests skipped (not built in)");
+#endif
         failed += EditorToolsTest();
 
         string? root = args.Length > 1 ? args[1] : PcgGenerator.FindLoennRoot(modDir);

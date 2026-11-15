@@ -38,7 +38,7 @@ public sealed class CreditEntry
     public bool NeedsAttention => Origin is CreditOrigin.PossiblyBorrowed or CreditOrigin.Unrecorded or CreditOrigin.Missing;
 }
 
-/// <summary>A credit the mapper recorded for a file in their own mod (stored in MT_Zenith.credits.json in the mod folder).</summary>
+/// <summary>A credit the mapper recorded for a file in their own mod (stored in Topo.credits.json in the mod folder).</summary>
 public sealed class RecordedCredit
 {
     public string Path { get; set; } = "";        // mod-relative, forward slashes
@@ -53,7 +53,8 @@ public sealed class RecordedCredit
 /// <summary>The credit manifest of the mapper's own mod: who made each asset they brought in.</summary>
 public sealed class CreditManifest
 {
-    public const string FileName = "MT_Zenith.credits.json";
+    public const string FileName = "Topo.credits.json";
+    private const string FormerFileName = "MT_Zenith.credits.json";
     public List<RecordedCredit> Assets { get; set; } = new();
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
@@ -65,7 +66,9 @@ public sealed class CreditManifest
         if (modDir == null) return new();
         try
         {
+            // mods credited before the rename still have the old file; it is read until the next save writes the new one
             string p = PathFor(modDir);
+            if (!File.Exists(p)) p = System.IO.Path.Combine(modDir, FormerFileName);
             if (File.Exists(p)) return JsonSerializer.Deserialize<CreditManifest>(File.ReadAllText(p)) ?? new();
         }
         catch { /* corrupt: start over rather than crash; the file is left alone until the next save */ }
@@ -358,7 +361,7 @@ public static class AssetCredits
                 sb.AppendLine($"  - {e.Kind}: {e.Asset}" + (e.CreditTo.Length > 0 ? $" (maybe {e.CreditTo})" : "") + (e.Note.Length > 0 ? $" — {e.Note}" : ""));
             sb.AppendLine();
         }
-        sb.AppendLine("Credit lookup by MT_Zenith using Maddie480's Celeste services (https://maddie480.ovh):");
+        sb.AppendLine("Credit lookup by Topo using Maddie480's Celeste services (https://maddie480.ovh):");
         sb.AppendLine("GameBanana mod database and the Celeste Community Asset Drive.");
         return sb.ToString();
     }

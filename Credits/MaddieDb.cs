@@ -24,7 +24,7 @@ public sealed class DriveAsset
 
     /// <summary>The author with the drive's "(give credit)" style suffixes removed.</summary>
     [JsonIgnore] public string CleanAuthor => MaddieDb.CleanAuthor(Author);
-    /// <summary>True when the drive folder says no credit is needed (still credited by MT_Zenith, but marked optional).</summary>
+    /// <summary>True when the drive folder says no credit is needed (still credited by Topo, but marked optional).</summary>
     [JsonIgnore] public bool CreditOptional =>
         (Author + " " + Name).Contains("no credit", StringComparison.OrdinalIgnoreCase);
     [JsonIgnore] public string FileUrl => MaddieDb.Base + "/celeste/asset-drive/files/" + Id;
@@ -54,7 +54,7 @@ public static class MaddieDb
     private static HttpClient CreateHttp()
     {
         var h = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
-        h.DefaultRequestHeaders.UserAgent.ParseAdd($"MT_Zenith/{AppInfo.Version} (Celeste map editor)");
+        h.DefaultRequestHeaders.UserAgent.ParseAdd($"Topo/{AppInfo.Version} (Celeste map editor)");
         return h;
     }
 

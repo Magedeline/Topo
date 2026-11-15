@@ -45,9 +45,6 @@ public sealed class ToolResult
     public JsonObject ToJson() => new() { ["content"] = Content.DeepClone(), ["isError"] = IsError };
 }
 
-/// <summary>A tool error the model should see (bad room name, read-only mode, ...).</summary>
-public sealed class ToolException(string message) : Exception(message);
-
 public sealed record ToolDef(string Name, string Description, JsonObject InputSchema, bool ReadOnly, Func<JsonObject, ToolResult> Run);
 
 /// <summary>
@@ -66,7 +63,7 @@ public sealed partial class MapTools
     };
 
     public const string Instructions =
-        "MT_Zenith (CEL map viewer/editor): inspect, build and verify Celeste .bin maps of the CEL (Desolo Zantas) mod. " +
+        "Topo (CEL map viewer/editor): inspect, build and verify Celeste .bin maps of the CEL (Desolo Zantas) mod. " +
         "Coordinates are pixels; entity/trigger x,y are relative to their room's top-left, rooms are placed in world pixels. " +
         "Tiles are 8x8: tile grids are rows of tileset chars ('0' = empty) and tile x,y are cell indices. A screen is 320x184 px (40x23 cells). " +
         "Room names are shown without the 'lvl_' prefix. Edits stay in memory until save_map (which also writes a .bak); use undo to revert the last edit. " +
@@ -75,6 +72,12 @@ public sealed partial class MapTools
         "reaches from the spawn, min tech per exit none/dash/advanced/unreachable, hazard pressure, routes, hints) -> fix with draw_tiles / entity tools -> analyze_map " +
         "detailed=true (openings connected/blocked/void, rooms reachable and traversable from the start) -> validate_map -> compare_to_tier -> save_map. " +
         "batch runs several tools as one undo step with rollback. render_room / analyze_room render=true show a room (and the reachability overlay). " +
+        "SEEING THE EDITOR: view_map shows the map as the editor canvas draws it, with real sprites: the whole map, one room with its surroundings, an area, or " +
+        "target='view' for exactly what the user is looking at right now; editor_state gives their camera, tool and selection. Look before and after you edit. " +
+        "HAND-CRAFTING: place items the way a person does in the editor: pick the type (list_placements), then add_entity with rest=floor/ceiling/left/right so it " +
+        "sits on the surface instead of at a guessed coordinate. Every pick is remembered across maps in placement_memory (recall it before decorating or adding " +
+        "hazards, note what the user corrects). PRESET GROUPS: save an arrangement worth keeping with save_preset (before reworking it, and whenever it will be reused), " +
+        "reuse it with place_preset; they are the same presets as the editor's Presets menu (list_presets). " +
         "Rooms come in size tiers normal/medium/large/xl/xxl (room_size_presets); resize_room grows or shrinks a room in any direction and can push neighbours. " +
         "PCG: pcg_generate (seleCte Markov sampler; candidates, repair, tier shaping, mechanics filter, per-room movement check, preview) -> pcg_import -> refine by hand; " +
         "pcg_train learns a new model from the open map or from reference maps of a difficulty tier. " +
@@ -212,9 +215,12 @@ public sealed partial class MapTools
         Add("list_placements", "Search the entity/trigger types known from installed Lönn plugins (name, source mod, default attributes).", true,
             Props(("query", P("string", "Substring of the type or placement name.")), ("kind", Enum("Filter.", "all", "entity", "trigger")),
                   ("limit", P("integer", "Max results (default 40)."))), None, ListPlacements);
-        Add("add_entity", "Place an entity (or trigger) in a room. Defaults come from the Lönn placement when the type is known.", false,
+        Add("add_entity", "Pick an entity (or trigger) and place it in a room, the way it is done by hand with the editor's palette and Place tool. Defaults come from " +
+            "the Lönn placement when the type is known. rest sets it down on the nearest surface from x,y instead of leaving it floating at a guessed coordinate; " +
+            "the placed item shows up selected in the editor and the pick is recorded in placement_memory.", false,
             Props(("room", RoomP), ("name", P("string", "Entity type, e.g. 'spikesUp', 'refill', 'CEL/...'.")),
                   ("x", P("number", "Room-local x.")), ("y", P("number", "Room-local y.")),
+                  ("rest", RestP), ("snap", P("boolean", "Snap x,y to the editor's 8px placement grid first (default false: exact coordinates).")),
                   ("trigger", P("boolean", "Place as a trigger.")), ("placement", P("string", "Placement name to take defaults from.")),
                   ("attrs", AttrsP), ("nodes", P("array", "Nodes as [[x,y], ...] (room-local)."))),
             new[] { "room", "name", "x", "y" }, AddEntity);
@@ -239,6 +245,8 @@ public sealed partial class MapTools
             Props(("lines", P("integer", "Lines from the end (default 80).")), ("filter", P("string", "Only lines containing this text."))), None, ReadLog);
 
         RegisterDesign();
+        RegisterEditor();
+        RegisterCraft();
         RegisterPcg();
         RegisterReference();
         RegisterMedia();
@@ -863,15 +871,23 @@ public sealed partial class MapTools
     private ToolResult AddEntity(JsonObject a)
     {
         EnsureCatalog();
-        return Edit(() =>
+        BinElement? placed = null, level = null;
+        var res = Edit(() =>
         {
             var map = MapOrThrow();
             var r = FindRoom(Req(a, "room"));
             var el = CreateEntity(map, a, MapModel.NextId(map), out bool trigger, out bool known);
+            var (surface, how) = HandPlace(r, el, trigger, a);
             (trigger ? r.TriggersEl : r.EntitiesEl).Children.Add(el);
+            Remember(el, trigger, a, surface);
+            placed = el;
+            level = r.El;
             string note = known ? "" : " (type not found in installed Lönn plugins; placed without defaults)";
-            return (r.El, $"Added {(trigger ? "trigger" : "entity")} {el.Name} #{el.Int("id")} at ({el.Num("x")},{el.Num("y")}) in {r.Name}{note}.");
+            return (r.El, $"Added {(trigger ? "trigger" : "entity")} {el.Name} #{el.Int("id")} at ({el.Num("x")},{el.Num("y")}) in {r.Name}{(how.Length > 0 ? ", " + how : "")}{note}.");
         });
+        PlacementMemory.Save();
+        if (placed != null) Reveal(level, new[] { placed });
+        return res;
     }
 
     private ToolResult UpdateEntity(JsonObject a) => Edit(() =>

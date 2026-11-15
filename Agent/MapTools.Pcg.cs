@@ -61,7 +61,7 @@ public sealed partial class MapTools
             if (_pcg != null) return _pcg;
             string? root = PcgGenerator.FindLoennRoot(_host.Invoke(() => ModDir(_host.Path)));
             if (root == null) throw new ToolException("PCGHelper not found. Install the PCGHelper mod next to the CEL mod (Mods/PCGHelper with Loenn/library/selecte), " +
-                                                    "or set MT_ZENITH_PCGHELPER to its folder, or use PCG > Locate PCGHelper in the GUI.");
+                                                    "or set TOPO_PCGHELPER to its folder, or use PCG > Locate PCGHelper in the GUI.");
             return _pcg = new PcgGenerator(root);
         }
     }

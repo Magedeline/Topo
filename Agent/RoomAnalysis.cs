@@ -44,6 +44,9 @@ public sealed class RoomExit
 /// </summary>
 public sealed class RoomAnalysis
 {
+    /// <summary>World rectangle to room-local coordinates.</summary>
+    internal static RectangleF Local(Room r, RectangleF world) => new(world.X - r.X, world.Y - r.Y, world.Width, world.Height);
+
     public readonly int Cols, Rows;
     public readonly CellKind[,] Grid;
     public readonly List<RoomExit> Exits = new();
@@ -122,7 +125,7 @@ public sealed class RoomAnalysis
                 a.Spawn ??= (Math.Clamp((int)Math.Floor(e.Num("x") / 8f), 0, a.Cols - 1), Math.Clamp((int)Math.Floor((e.Num("y") - 1) / 8f), 0, a.Rows - 1));
                 continue;
             }
-            var box = MapTools.Local(room, MapModel.Box(room, e, false));
+            var box = Local(room, MapModel.Box(room, e, false));
             string n = Short(e.Name);
             string? cat = ReferenceMaps.Category(e.Name);
             if (EntityVisuals.SpikeDir(e.Name) != null || cat is "spikes" or "spinners" or "other_hazards") { hazards.Add(box); continue; }

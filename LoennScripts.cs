@@ -781,7 +781,7 @@ public static class LoennScripts
         module("structs.entity", { decode = function(d) local c = utils.deepcopy(d) c._type = "entity" return c end })
         module("structs.trigger", { decode = function(d) local c = utils.deepcopy(d) c._type = "trigger" return c end })
 
-        -- registered entities/triggers come from MT_Zenith's plugin catalog
+        -- registered entities/triggers come from Topo's plugin catalog
         local registered = setmetatable({}, { __index = function(t, k) local h = __entityHandler(k) if h then rawset(t, k, h) end return h end })
         module("entities", { registeredEntities = registered })
         module("triggers", { registeredTriggers = registered })

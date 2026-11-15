@@ -232,7 +232,7 @@ public sealed class McpServer : IDisposable
             {
                 if (id != null)
                     output.WriteLine(Error(id, -32603,
-                        $"{AppInfo.Title} is not reachable at {url} ({ex.Message}). Open MT_Zenith and enable AI ▸ MCP server.").ToJsonString(MapTools.JsonOut));
+                        $"{AppInfo.Title} is not reachable at {url} ({ex.Message}). Open Topo and enable AI ▸ MCP server.").ToJsonString(MapTools.JsonOut));
             }
         }
         return 0;
