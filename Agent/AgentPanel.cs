@@ -281,6 +281,7 @@ public sealed class AgentPanel : UserControl
         menu.Items.Add(design);
         menu.Items.Add(pcg);
         menu.Items.Add(review);
+        menu.Items.Add("Restyle the selected room with PCG and refine it", null, (_, _) => UsePrompt(Prompts.RestyleRooms(null, null, null)));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Polish and finish the open map", null, (_, _) => UsePrompt(Prompts.PolishMap()));
         var btn = new Button { Text = "Design ▾", AutoSize = true, Margin = new Padding(8, 1, 3, 0) };
@@ -372,6 +373,9 @@ public sealed class AgentPanel : UserControl
                ?? Pick(o => o?["kind"]?.ToString() == "allow_once")
                ?? Pick(o => (o?["name"]?.ToString() ?? "").Contains("allow", StringComparison.OrdinalIgnoreCase) || (o?["name"]?.ToString() ?? "").Contains("yes", StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>Puts a prompt in the input box (the user reviews and sends it).</summary>
+    public void InsertPrompt(string text) => UsePrompt(text);
 
     private void UsePrompt(string text)
     {

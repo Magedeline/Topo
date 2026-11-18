@@ -385,6 +385,106 @@ return { seed = tostring(rng.seed), rooms = rooms, route = route, allPlayable = 
         return result;
     }
 
+    // ---- restyling existing rooms ----
+
+    /// <summary>
+    /// A sampler that resamples only the cells marked editable in existing rooms with a foreground model's MdMC dict,
+    /// collapsed to solid/air. Call the returned function once per try: (rooms as rows of '0'/'1' plus edit-mask rows of
+    /// '0'/'1', seed, strength 0..1 = chance an editable cell is resampled) → new rows per room. Unseen patterns keep the cell.
+    /// </summary>
+    public Func<IReadOnlyList<(string[] Rows, string[] Edit)>, string, double, List<string[]>> SurfaceSampler(string model, Action<string> log)
+    {
+        _cancel = false;
+        var script = CreateScript(log);
+        script.Globals["__model"] = model;
+        script.Globals["__customFg"] = Models.Contains(model) ? DynValue.Nil : LoadCustomDpe(script, model, "fg");
+        const string setup = @"
+local Rng = require('library.selecte.rng').Rng
+local dpeData = require('library.selecte.dpe_data')
+local mdmc = require('library.selecte.mdmc')
+local dpe = __customFg or dpeData[__model]
+if not dpe then error('unknown model ' .. tostring(__model)) end
+local mask = mdmc.resolveMask(dpe)
+mdmc.checkDpeMatchesMask(dpe, mask)
+local ti, tj, side = mask.target[1], mask.target[2], mask.side
+-- dists collapsed to { '0', p(not solid), '1', p(solid) }, cached per pattern
+local collapsed = {}
+local function binary(dist)
+  local b = collapsed[dist]
+  if b == nil then
+    local p0, p1 = 0, 0
+    for k = 1, #dist - 1, 2 do
+      if dist[k] == '1' then p1 = p1 + dist[k + 1] else p0 = p0 + dist[k + 1] end
+    end
+    b = (p0 + p1 > 0) and { '0', p0, '1', p1 } or false
+    collapsed[dist] = b
+  end
+  return b
+end
+function __restyle(rooms, seed, strength)
+  local rng = Rng.new(seed)
+  local out = {}
+  for i, room in ipairs(rooms) do
+    local data = mdmc.rowsToRoom(room.rows)
+    local edit = room.edit
+    local h, w = #data, #data[1]
+    for r = 1, h - side + 1 do
+      local tr = r + ti
+      local erow = edit[tr]
+      for c = 1, w - side + 1 do
+        local tc = c + tj
+        if erow:sub(tc, tc) == '1' and rng:random() < strength then
+          local dist = mdmc.lookup(data, r, c, dpe, mask.offsets)
+          local b = dist and binary(dist)
+          if b then data[tr][tc] = rng:weighted(b) end
+        end
+      end
+    end
+    out[i] = mdmc.roomToRows(data)
+  end
+  return out
+end
+";
+        script.DoString(setup);
+        var fn = script.Globals.Get("__restyle");
+        return (rooms, seed, strength) =>
+        {
+            var list = new Table(script);
+            foreach (var (rows, edit) in rooms)
+            {
+                var t = new Table(script);
+                var rt = new Table(script);
+                foreach (string row in rows) rt.Append(DynValue.NewString(row));
+                var et = new Table(script);
+                foreach (string row in edit) et.Append(DynValue.NewString(row));
+                t["rows"] = rt; t["edit"] = et;
+                list.Append(DynValue.NewTable(t));
+            }
+            var res = script.Call(fn, list, seed, strength);
+            return Seq(res).Select(r => Seq(r).Select(x => x.String).ToArray()).ToList();
+        };
+    }
+
+    /// <summary>A background layer for a room of the given size from a background model (built-in bg_* or a custom bg model).</summary>
+    public string[] GenerateBackground(string model, int wTiles, int hTiles, string seed, Action<string> log)
+    {
+        _cancel = false;
+        var script = CreateScript(log);
+        script.Globals["__model"] = model;
+        script.Globals["__customBg"] = Backgrounds.Contains(model) ? DynValue.Nil : LoadCustomDpe(script, model, "bg");
+        script.Globals["__w"] = wTiles; script.Globals["__h"] = hTiles; script.Globals["__seed"] = seed;
+        const string flow = @"
+local Rng = require('library.selecte.rng').Rng
+local dpeData = require('library.selecte.dpe_data')
+local level = require('library.selecte.level')
+local mdmc = require('library.selecte.mdmc')
+local dpe = __customBg or dpeData[__model]
+if not dpe then error('unknown background model ' .. tostring(__model)) end
+return mdmc.roomToRows(level.generateBackground(dpe, __w, __h, Rng.new(__seed), 0))
+";
+        return Seq(script.DoString(flow)).Select(x => x.String).ToArray();
+    }
+
     // ---- training (recombine.buildCorpus + mdmc.estimate) ----
 
     /// <summary>

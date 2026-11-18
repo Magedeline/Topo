@@ -79,6 +79,17 @@ public sealed partial class MainForm
         return _aiPage;
     }
 
+    /// <summary>
+    /// Hands a restyle to the agent: switches to the AI tab and puts the restyle workflow (with the dialog's settings, if any)
+    /// in the input box for the user to review and send.
+    /// </summary>
+    private void AskAiRestyle(List<Room> rooms, RestyleOptions? o)
+    {
+        _tabs.SelectedTab = _aiPage;
+        _agentPanel.InsertPrompt(Prompts.RestyleRooms(string.Join(", ", rooms.Select(r => r.Name)), null, o != null ? Prompts.RestyleArgs(o) : null));
+        Log($"Restyle of {string.Join(", ", rooms.Select(r => r.Name))} is in the AI tab's input box: review it, then send.");
+    }
+
     private string AgentContext()
     {
         var parts = new List<string> { $"[{AppInfo.Title} — the user is looking at this editor; use the {McpServer.ServerName} MCP tools to inspect and edit the map. Edits appear live and can be undone.]" };

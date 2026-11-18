@@ -73,6 +73,17 @@ public static class Prompts
         },
         new JsonObject
         {
+            ["name"] = "restyle_rooms",
+            ["title"] = "Restyle existing rooms with PCG and refine them",
+            ["description"] = "Rework the tiles of chosen rooms with pcg_restyle (fillers and other rooms untouched, routes kept), compare before/after, retune and hand-finish.",
+            ["arguments"] = new JsonArray
+            {
+                Arg("rooms", "Room names or prefixes like 'c-*', comma separated (default: the selected room).", false),
+                Arg("style", "Look to aim for (e.g. 'crumbling ruins, mossy').", false),
+            }
+        },
+        new JsonObject
+        {
             ["name"] = "pcg_level",
             ["title"] = "Generate a level with PCG and refine it",
             ["description"] = "Use pcg_generate (candidates, repair, tier) to lay out a connected level, import it, then hand-refine every room with the movement model.",
@@ -90,7 +101,7 @@ public static class Prompts
     public static JsonObject Get(string name, JsonObject? args)
     {
         string? A(string k) => args?[k]?.ToString() is { Length: > 0 } s ? s.Trim() : null;
-        int tier = name is "polish_map" || (name == "fix_room" && A("tier") == null) ? 0 : ReferenceMaps.ParseTier(A("tier"));
+        int tier = name is "polish_map" or "restyle_rooms" || (name == "fix_room" && A("tier") == null) ? 0 : ReferenceMaps.ParseTier(A("tier"));
         string tierName = ReferenceMaps.TierNames[tier];
         string text = name switch
         {
@@ -100,6 +111,7 @@ public static class Prompts
             "fix_room" => FixRoom(A("room") ?? throw new ToolException("fix_room needs a room."), tier),
             "polish_map" => PolishMap(),
             "pcg_level" => PcgLevel(tier, tierName, A("rooms"), A("model")),
+            "restyle_rooms" => RestyleRooms(A("rooms"), A("style"), null),
             _ => throw new ToolException("Unknown prompt: " + name)
         };
         return new JsonObject
@@ -182,4 +194,44 @@ public static class Prompts
         4. For each generated room: analyze_room; rebuild the weak parts with draw_tiles / entities so every exit is reachable with the intended tech and the room has a clear route and idea; the generator gives you shapes, you give them intent.
         5. validate_map, compare_to_tier, polish, save_map; report what changed per room.
         """;
+
+    /// <summary>The restyle workflow; <paramref name="settings"/> are pcg_restyle arguments chosen in the dialog (see <see cref="RestyleArgs"/>).</summary>
+    public static string RestyleRooms(string? rooms, string? style, string? settings)
+    {
+        string list = rooms is { Length: > 0 }
+            ? "[" + string.Join(", ", rooms.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(r => $"\"{r}\"")) + "]"
+            : "";
+        string which = list.Length > 0 ? $"the rooms {list}" : "the room selected in the editor (editor_state)";
+        string args = (list.Length > 0 ? $"rooms={list} " : "") + (settings ?? "");
+        return $"""
+            Restyle {which} with the procedural generator{(style != null ? $", aiming for: {style}" : "")}, keeping every route as it is.
+            Only those rooms may change. Fillers (the grey hatched blocks) and all other rooms must not be touched, and room size, position, openings, entities and spawns stay put.
+            1. Baseline: view_map of those rooms as they are now, and analyze_room each one; note required_tech per exit and unreachable items.
+            2. pcg_restyle {args}dry_run=true. Read the per-room lines: a room "kept as it was" could not be restyled without making an exit harder.
+            3. pcg_restyle {args}(no dry_run), then view_map again and compare with the baseline. A room that looks noisy or lost its character: undo and redo it alone with strength 0.3-0.4 or depth 1 or another seed. One that barely changed: strength 0.8 or depth 3. Keep the best version of each room.
+            4. Finish by hand what the sampler can't: smooth tile artefacts with draw_tiles, add bg tiles or decals that suit the look{(style != null ? $" ({style})" : "")}. Do not move entities.
+            5. Verify: analyze_room every restyled room; each exit must need the same tech as the baseline or less, items stay reachable, spawns stand on ground. Fix or undo anything that got worse.
+            6. design_notes log: the seed and settings used and what changed per room. Do not save_map unless asked; tell the user to review and save (Ctrl+S).
+            """;
+    }
+
+    /// <summary>pcg_restyle arguments for options chosen in the Restyle dialog.</summary>
+    public static string RestyleArgs(RestyleOptions o)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var parts = new List<string>();
+        if (!o.Surfaces) parts.Add("surfaces=false");
+        else
+        {
+            parts.Add($"model=\"{o.Model}\"");
+            parts.Add("strength=" + o.Strength.ToString("0.##", inv));
+            parts.Add($"depth={o.Depth} margin={o.Margin} tries={o.Tries}");
+            if (!o.KeepRoutes) parts.Add("keep_routes=false");
+        }
+        if (o.Seed.Length > 0) parts.Add($"seed=\"{o.Seed}\"");
+        if (o.Tileset is char t) parts.Add($"tileset=\"{t}\"");
+        if (o.FromTileset is char f) parts.Add($"from_tileset=\"{f}\"");
+        if (o.Background != "keep") parts.Add($"background=\"{o.Background}\"");
+        return string.Join(" ", parts) + " ";
+    }
 }

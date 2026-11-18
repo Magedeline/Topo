@@ -41,6 +41,24 @@ public sealed partial class MapTools
             Props(("generation_id", P("string", "From pcg_generate (default: the last one).")),
                   ("prefix", P("string", "Room name prefix (default 'pcg_').")),
                   ("x", P("integer", "World x of the level's top-left (default right of the map).")), ("y", P("integer", "World y."))), None, PcgImport);
+        Add("pcg_restyle", "Rework the tiles of EXISTING rooms with a seleCte model, in one undo step, without moving/resizing them or touching " +
+            "fillers and other rooms: surface cells (walls, floors, ceilings within 'depth' tiles of a solid/air edge) are resampled, away from the border, " +
+            "openings, entities and the spawn; new solids continue the neighbouring tileset. Each room is judged with the movement model against how it was " +
+            "and resampled (up to 'tries') or left as it was when an exit or item gets harder. Can also swap tilesets and regenerate/clear the background. " +
+            "dry_run=true reports without changing the map. Look at the result with view_map.", false,
+            Props(("rooms", ArrayP("Room names or prefixes ending in '*' (e.g. 'c-*'). Default: the room selected in the editor.", new JsonObject { ["type"] = "string" })),
+                  ("model", P("string", "Foreground model (pcg_models; default pe_d5_full).")),
+                  ("surfaces", P("boolean", "Rework surfaces (default true; false = only tileset/background).")),
+                  ("strength", P("number", "0..1 chance an editable cell is resampled (default 0.6).")),
+                  ("depth", P("integer", "Tiles from a surface that may change, 1-4 (default 2).")),
+                  ("margin", P("integer", "Tiles kept untouched around openings, entities and the spawn (default 2).")),
+                  ("tries", P("integer", "Resamples per room before leaving it as it was (default 6).")),
+                  ("seed", P("string", "Seed (blank = random; reported back).")),
+                  ("tileset", P("string", "Glyph every solid becomes (list_tilesets), e.g. '3'.")),
+                  ("from_tileset", P("string", "Only swap this glyph.")),
+                  ("background", P("string", "'keep' (default), 'clear' or a background model (bg_1..bg_9 or custom).")),
+                  ("keep_routes", P("boolean", "Reject results that make an exit or item harder (default true).")),
+                  ("dry_run", P("boolean", "Only report (default false)."))), None, PcgRestyleTool);
         Add("pcg_train", "Train a new seleCte Markov model from rooms and save it under a name usable as pcg_generate's model/background: " +
             "from the open map, or from installed reference maps filtered by difficulty tier / substring / explicit keys (list_reference_maps). " +
             "Foreground models learn layout + spikes/spinners/boosters/refills/etc. from the chosen rooms, so a model trained on Strawberry Jam Expert maps " +
@@ -173,6 +191,64 @@ public sealed partial class MapTools
                          $"Route: {string.Join(" -> ", cand.Result.Route.Select(n => prefix + n))}.";
             if (overlaps.Count > 0) msg += $" WARNING: overlaps existing rooms {string.Join(", ", overlaps)}; move them (update_room) or redo with a different x/y.";
             return (null, msg);
+        });
+    }
+
+    private ToolResult PcgRestyleTool(JsonObject a)
+    {
+        var gen = Pcg();
+        var patterns = (a["rooms"] as JsonArray)?.Select(n => n?.ToString() ?? "").Where(x => x.Length > 0).ToList() ?? new List<string>();
+        var rooms = _host.Invoke(() =>
+        {
+            var all = MapModel.Levels(MapOrThrow()).Children.Select(l => new Room(l)).ToList();
+            if (patterns.Count == 0)
+            {
+                string? sel = _host.View?.SelectedRoom;
+                if (sel == null) throw new ToolException("No rooms given and no room selected in the editor; pass rooms (names or 'c-*').");
+                patterns.Add(sel);
+            }
+            var picked = new List<Room>();
+            foreach (string raw in patterns)
+            {
+                string p = raw.StartsWith("lvl_") ? raw[4..] : raw;
+                var hit = p.EndsWith('*')
+                    ? all.Where(r => r.Name.StartsWith(p[..^1], StringComparison.OrdinalIgnoreCase)).ToList()
+                    : all.Where(r => string.Equals(r.Name, p, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (hit.Count == 0) throw new ToolException($"No room matches '{raw}'. Use list_rooms.");
+                foreach (var r in hit) if (!picked.Any(x => x.El == r.El)) picked.Add(r);
+            }
+            return picked;
+        });
+        char? Glyph(string k) => S(a, k) is { Length: > 0 } g ? g[0] : null;
+        var o = new RestyleOptions
+        {
+            Model = S(a, "model") ?? "pe_d5_full",
+            Seed = S(a, "seed") ?? "",
+            Surfaces = B(a, "surfaces", true),
+            Strength = Math.Clamp(D(a, "strength") ?? 0.6, 0.01, 1),
+            Depth = Math.Clamp(I(a, "depth") ?? 2, 1, 4),
+            Margin = Math.Clamp(I(a, "margin") ?? 2, 0, 8),
+            Tries = Math.Clamp(I(a, "tries") ?? 6, 1, 30),
+            Tileset = Glyph("tileset"),
+            FromTileset = Glyph("from_tileset"),
+            Background = S(a, "background") is { Length: > 0 } bgName ? bgName : "keep",
+            KeepRoutes = B(a, "keep_routes", true),
+        };
+        if (!o.Surfaces && o.Tileset == null && o.Background == "keep") throw new ToolException("Nothing to do: surfaces=false and no tileset/background change.");
+        var log = new List<string>();
+        List<RestyleRoom> plan;
+        try { plan = PcgRestyle.Plan(gen, rooms, o, s => { lock (log) log.Add(s); }); }
+        catch (MoonSharp.Interpreter.InterpreterException ex) { throw new ToolException("PCG failed: " + (ex.DecoratedMessage ?? ex.Message)); }
+        catch (ArgumentException ex) { throw new ToolException(ex.Message); }
+        string lines = string.Join("\n", plan.Select(PcgRestyle.Describe));
+        int changed = plan.Count(r => r.Fg != null || r.Bg != null);
+        string head = $"Restyle seed \"{o.Seed}\", model {o.Model}: {changed}/{plan.Count} room(s) changed";
+        if (B(a, "dry_run")) return ToolResult.Text(head + " (dry run, map unchanged)\n" + lines);
+        if (changed == 0) return ToolResult.Text(head + "; nothing applied.\n" + lines);
+        return Edit(() =>
+        {
+            PcgRestyle.Apply(plan);
+            return (plan.Count(r => r.Applied) == 1 ? plan.First(r => r.Applied).Room.El : null, head + ". Undo reverts all of it.\n" + lines);
         });
     }
 

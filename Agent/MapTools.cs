@@ -79,7 +79,7 @@ public sealed partial class MapTools
         "hazards, note what the user corrects). PRESET GROUPS: save an arrangement worth keeping with save_preset (before reworking it, and whenever it will be reused), " +
         "reuse it with place_preset; they are the same presets as the editor's Presets menu (list_presets). " +
         "Rooms come in size tiers normal/medium/large/xl/xxl (room_size_presets); resize_room grows or shrinks a room in any direction and can push neighbours. " +
-        "PCG: pcg_generate (seleCte Markov sampler; candidates, repair, tier shaping, mechanics filter, per-room movement check, preview) -> pcg_import -> refine by hand; " +
+        "PCG: pcg_generate (seleCte Markov sampler; candidates, repair, tier shaping, mechanics filter, per-room movement check, preview) -> pcg_import -> refine by hand; pcg_restyle reworks the tiles of existing rooms (surface detail, tileset swap, background) without touching fillers or other rooms and keeps their routes; " +
         "pcg_train learns a new model from the open map or from reference maps of a difficulty tier. " +
         "Difficulty: tiers beginner, intermediate, advanced, expert, grandmaster. difficulty_profile gives densities/sizes/common entities; study a few example maps " +
         "with study_reference_map (installed collabs such as Strawberry Jam/Spring Collab), build original rooms, then check with compare_to_tier. " +

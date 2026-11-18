@@ -581,6 +581,8 @@ internal static class SelfTest
             trainOk &= fromCustom is { Rooms.Count: 2 } && !PcgGenerator.ModelNames().Contains(modelName);
             Console.WriteLine($"pcg train: {tr.Patterns} patterns from {tr.RoomsKept}/{tr.RoomsTotal} rooms ({tr.Entities} entities), generated {fromCustom?.Rooms.Count ?? 0} rooms from it, saved as {info.Name} then deleted " + (trainOk ? "ok" : "FAILED"));
             if (!trainOk) failed++;
+
+            failed += RestyleTest(gen, maps);
         }
         catch (Exception ex)
         {
@@ -588,5 +590,102 @@ internal static class SelfTest
             Console.WriteLine("PCG ERROR: " + (ex is MoonSharp.Interpreter.InterpreterException ie ? ie.DecoratedMessage : ex.ToString()));
         }
         return failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>PCG restyle on real rooms: borders, entities, fillers and other rooms untouched, routes kept, deterministic, tileset swap.</summary>
+    private static int RestyleTest(PcgGenerator gen, string maps)
+    {
+        int failed = 0;
+        void Check(string what, bool ok, string detail = "")
+        {
+            Console.WriteLine($"restyle: {what} " + (ok ? "ok" : "FAILED") + (detail.Length > 0 ? $" ({detail})" : ""));
+            if (!ok) failed++;
+        }
+        string file = Directory.EnumerateFiles(maps, "*Stronghold*.bin", SearchOption.AllDirectories).FirstOrDefault()
+                      ?? Directory.EnumerateFiles(maps, "*.bin", SearchOption.AllDirectories).First();
+        var map = MapBin.Load(file);
+        var all = MapModel.Levels(map).Children.Select(l => new Room(l)).ToList();
+        var picked = all.Where(r => r.Cols >= 20 && r.Rows >= 15).Take(8).ToList();
+        var others = all.Except(picked).ToDictionary(r => r.Name, r => r.Grid(true).Serialize());
+        var fillersBefore = Fillers.Rects(map).Count;
+        var origFg = picked.ToDictionary(r => r.Name, r => r.Grid(true).Clone());
+        var origEnt = picked.ToDictionary(r => r.Name, r => string.Join("|", r.EntitiesEl.Children.Select(e => $"{e.Name}{e.Num("x")},{e.Num("y")}")));
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var o = new RestyleOptions { Seed = "restyle", Strength = 0.7 };
+        var plan = PcgRestyle.Plan(gen, picked, o, _ => { });
+        var plan2 = PcgRestyle.Plan(gen, picked, new RestyleOptions { Seed = "restyle", Strength = 0.7 }, _ => { });
+        Check("deterministic", plan.Zip(plan2).All(p => (p.First.Fg?.Serialize() ?? "") == (p.Second.Fg?.Serialize() ?? "")));
+        // TOPO_RESTYLE_DUMP=<png path>: before (left) / after (right) of every picked room, for eyeballing
+        Bitmap? dump = null;
+        if (Environment.GetEnvironmentVariable("TOPO_RESTYLE_DUMP") is { Length: > 0 })
+        {
+            int dw = picked.Max(r => r.W), dh = picked.Sum(r => r.H + 8);
+            dump = new Bitmap(dw * 2 + 8, dh);
+            using var g = Graphics.FromImage(dump);
+            g.Clear(Color.FromArgb(24, 24, 32));
+            int y = 0;
+            foreach (var r in picked) { using var img = RoomRenderJob.From(r, Autotiler.For(null, true, null), Autotiler.For(null, false, null)).Render(); if (RoomImage.Level(img.Fg, 0) is { } l) g.DrawImage(l, 0, y, r.W, r.H); y += r.H + 8; }
+        }
+        int changed = PcgRestyle.Apply(plan);
+        if (dump != null)
+        {
+            using (var g = Graphics.FromImage(dump))
+            {
+                int y = 0, x0 = picked.Max(r => r.W) + 8;
+                foreach (var r in picked) { using var img = RoomRenderJob.From(r, Autotiler.For(null, true, null), Autotiler.For(null, false, null)).Render(); if (RoomImage.Level(img.Fg, 0) is { } l) g.DrawImage(l, x0, y, r.W, r.H); y += r.H + 8; }
+            }
+            dump.Save(Environment.GetEnvironmentVariable("TOPO_RESTYLE_DUMP")!);
+            dump.Dispose();
+        }
+        Console.WriteLine($"restyle: {Path.GetFileName(file)}, {picked.Count} rooms in {sw.ElapsedMilliseconds} ms (both runs)");
+        foreach (var r in plan) Console.WriteLine("  " + PcgRestyle.Describe(r));
+        Check("some rooms changed", changed > 0, $"{changed}/{picked.Count}");
+
+        bool borders = true, ents = true, routes = true;
+        foreach (var r in picked)
+        {
+            var g = r.Grid(true);
+            var o0 = origFg[r.Name];
+            for (int x = 0; x < r.Cols; x++) borders &= g[x, 0] == o0[x, 0] && g[x, r.Rows - 1] == o0[x, r.Rows - 1];
+            for (int y = 0; y < r.Rows; y++) borders &= g[0, y] == o0[0, y] && g[r.Cols - 1, y] == o0[r.Cols - 1, y];
+            ents &= origEnt[r.Name] == string.Join("|", r.EntitiesEl.Children.Select(e => $"{e.Name}{e.Num("x")},{e.Num("y")}"));
+            var before = Agent.RoomAnalysis.Report(PcgRestyle.WithFg(r, o0)).Basic;
+            var after = Agent.RoomAnalysis.Report(r).Basic;
+            for (int i = 0; i < Math.Min(before.Exits.Count, after.Exits.Count); i++)
+                if ((int)(after.Exits[i].MinTech ?? (Agent.Tech)3) > (int)(before.Exits[i].MinTech ?? (Agent.Tech)3)) { routes = false; Console.WriteLine($"  {r.Name}: exit {after.Exits[i].Label} got harder"); }
+        }
+        Check("borders/openings unchanged", borders);
+        Check("entities unchanged", ents);
+        Check("no exit got harder", routes);
+        Check("other rooms and fillers untouched", Fillers.Rects(map).Count == fillersBefore &&
+              all.Except(picked).All(r => others[r.Name] == r.Grid(true).Serialize()));
+
+        var swap = PcgRestyle.Plan(gen, picked.Take(2).ToList(), new RestyleOptions { Surfaces = false, Tileset = '3' }, _ => { });
+        PcgRestyle.Apply(swap);
+        bool swapped = picked.Take(2).All(r => { var g = r.Grid(true); for (int y = 0; y < r.Rows; y++) for (int x = 0; x < r.Cols; x++) if (g[x, y] != '0' && g[x, y] != '3') return false; return true; });
+        Check("tileset swap", swapped && swap.Sum(s => s.Swapped) > 0);
+
+#if TOPO_AI
+        // the agent tool: prefix pattern, dry run leaves the map alone, a real run is one undo step
+        var host = new Agent.HeadlessHost();
+        host.Load(MapBin.Load(file), file);
+        var tools = new Agent.MapTools(host);
+        string Text(Agent.ToolResult r) => string.Join("\n", r.Content.OfType<System.Text.Json.Nodes.JsonObject>().Where(c => c["type"]?.ToString() == "text").Select(c => c["text"]?.ToString()));
+        string Snap() => string.Join("\n", MapModel.Levels(host.Map!).Children.Select(l => new Room(l).Grid(true).Serialize()));
+        string s0 = Snap();
+        var dry = Text(tools.Call("pcg_restyle", System.Text.Json.Nodes.JsonNode.Parse("""{"rooms":["b-0*"],"seed":"t","dry_run":true}""") as System.Text.Json.Nodes.JsonObject));
+        Console.WriteLine("  " + dry.Split('\n')[0]);
+        Check("tool dry run leaves the map", Snap() == s0 && dry.Contains("dry run"));
+        var run = Text(tools.Call("pcg_restyle", System.Text.Json.Nodes.JsonNode.Parse("""{"rooms":["b-0*"],"seed":"t"}""") as System.Text.Json.Nodes.JsonObject));
+        bool edited = Snap() != s0;
+        host.Undo();
+        Check("tool applies, undo restores", edited && Snap() == s0, run.Split('\n')[0]);
+        string prompt = Agent.Prompts.Get("restyle_rooms", new System.Text.Json.Nodes.JsonObject { ["rooms"] = "c-*, d-01" })["messages"]![0]!["content"]!["text"]!.ToString();
+        string withArgs = Agent.Prompts.RestyleRooms("a-00", null, Agent.Prompts.RestyleArgs(new RestyleOptions { Strength = 0.4, Tileset = '3' }));
+        Check("agent prompt", Agent.Prompts.List().Any(p => p?["name"]?.ToString() == "restyle_rooms") && prompt.Contains("rooms=[\"c-*\", \"d-01\"]")
+              && withArgs.Contains("strength=0.4") && withArgs.Contains("tileset=\"3\"") && withArgs.Contains("dry_run=true"));
+#endif
+        return failed;
     }
 }

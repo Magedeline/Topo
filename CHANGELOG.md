@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**PCG ▸ Restyle rooms (Ctrl+Shift+G, also on the canvas right-click menu)**
+- Reworks the tiles of rooms you already have instead of generating new ones. Pick rooms (filter by name, e.g. `c-`), and the seleCte model resamples only the tiles near walls, floors and ceilings. Room size, position, border, openings, entities and the spawn stay as they are; new solids continue the tileset next to them.
+- Fillers (the grey hatched blocks) and rooms you didn't pick are never touched.
+- Thin pillars, ledges and stalactites (3 tiles or less) are never worn down. A wall is never cut in two, nothing new floats on its own, and no sealed air bubbles or one-tile slots are left.
+- Each room is checked with the movement model against how it was. If an exit or item gets harder, Topo tries another seed, and after a few tries leaves the room as it was.
+- Optional tileset swap (all solids, or only one tileset) and background regenerate/clear. Apply is one undo step.
+- Works the same in both editions. The standard edition has only the dialog and contains no AI code.
+- **AI edition:**
+  - **Hand to AI agent…** in the dialog: the agent restyles the checked rooms with your settings, compares before and after, retunes rooms that look off, finishes them by hand and re-checks every exit. The prompt lands in the AI tab for you to review before sending.
+  - Right-click a room → *Restyle room … with the AI agent…*, and *Design ▾ → Restyle the selected room with PCG and refine it*, start the same workflow.
+  - New `pcg_restyle` agent tool (room names or `c-*` prefixes, `dry_run`) and `restyle_rooms` MCP prompt.
+
 ## 1.2.0
 
 **Renamed to Topo** (was MT_Zenith)

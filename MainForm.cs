@@ -161,6 +161,7 @@ public sealed partial class MainForm : Form
 
         var pcg = new ToolStripMenuItem("&PCG");
         pcg.DropDownItems.Add(new ToolStripMenuItem("&Generate rooms (PCGHelper seleCte)…", null, (_, _) => GenerateRooms(), Keys.Control | Keys.G));
+        pcg.DropDownItems.Add(new ToolStripMenuItem("&Restyle rooms (rework existing tiles)…", null, (_, _) => RestyleRooms(SelectedRoom()), Keys.Control | Keys.Shift | Keys.G));
         pcg.DropDownItems.Add(new ToolStripMenuItem("&Locate PCGHelper…", null, (_, _) => LocatePcgHelper(force: true)));
 
         var assets = new ToolStripMenuItem("A&ssets");
@@ -966,6 +967,11 @@ public sealed partial class MainForm : Form
             menu.Items.Add("New room here…", null, (_, _) => NewRoom(at));
         }
         menu.Items.Add("Generate rooms (PCG)…", null, (_, _) => GenerateRooms());
+        menu.Items.Add(room != null ? $"Restyle room {room.Name} (PCG)…" : "Restyle rooms (PCG)…", null, (_, _) => RestyleRooms(room));
+#if TOPO_AI
+        if (room != null)
+            menu.Items.Add($"Restyle room {room.Name} with the AI agent…", null, (_, _) => AskAiRestyle(new List<Room> { room }, null));
+#endif
         menu.Show(_canvas, screen);
     }
 
@@ -1096,6 +1102,32 @@ public sealed partial class MainForm : Form
         _canvas.FitRect(bounds);
         Log($"Imported {added.Count} generated rooms (seed \"{result.Seed}\"): {string.Join(", ", added.Select(l => l.Str("name")))}. " +
             "Save (Ctrl+S) to write them; the game sees new rooms after the reload.");
+    }
+
+    private void RestyleRooms(Room? selected)
+    {
+        if (_map == null) { Log("Open a map first."); return; }
+        string? root = LocatePcgHelper(force: false);
+        if (root == null)
+        {
+            Log("PCGHelper not found. Install it next to CEL (Mods/PCGHelper) or use PCG ▸ Locate PCGHelper…");
+            return;
+        }
+        var tilesets = (_canvas.FgTiler?.Tilesets ?? Enumerable.Empty<Autotiler.Tileset>()).OrderBy(t => t.Id).Select(t => (t.Id, t.DisplayName)).ToList();
+#if TOPO_AI
+        using var form = new RestyleForm(new PcgGenerator(root), _canvas.Rooms, selected, tilesets, (rooms, o) => AskAiRestyle(rooms, o));
+#else
+        using var form = new RestyleForm(new PcgGenerator(root), _canvas.Rooms, selected, tilesets);
+#endif
+        if (form.ShowDialog(this) != DialogResult.OK || form.Plan is not { } plan) return;
+
+        PushUndo();
+        int n = PcgRestyle.Apply(plan);
+        foreach (var r in plan.Where(r => r.Applied)) { r.Room.ReloadTiles(); r.Room.InvalidateRender(); }
+        LoadGrid();
+        _canvas.Invalidate();
+        MarkDirty();
+        Log($"Restyled {n} room(s): {string.Join(", ", plan.Where(r => r.Applied).Select(r => r.Room.Name))}. Ctrl+Z undoes it; save (Ctrl+S) to write it.");
     }
 
     private void Log(string s)
