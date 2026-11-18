@@ -11,7 +11,7 @@
     <AssemblyName>Topo</AssemblyName>
     <Product>Topo</Product>
     <Description>Map viewer/editor with AI (MCP/ACP) tools for the CEL (Desolo Zantas) Celeste mod</Description>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <ApplicationIcon>Topo.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);dist/**</DefaultItemExcludes>
   </PropertyGroup>

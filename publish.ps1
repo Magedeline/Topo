@@ -46,7 +46,7 @@ foreach ($g in 'stage', 'SHA256SUMS.txt', 'release-notes.md', 'gamebanana.txt') 
 $changes = ''
 $changelog = Join-Path $here 'CHANGELOG.md'
 if (Test-Path $changelog) {
-	$m = [regex]::Match((Get-Content $changelog -Raw), "(?ms)^## $([regex]::Escape($Version))\s*\r?\n(.*?)(?=^## |\z)")
+	$m = [regex]::Match((Get-Content $changelog -Raw -Encoding UTF8), "(?ms)^## $([regex]::Escape($Version))\s*\r?\n(.*?)(?=^## |\z)")
 	if ($m.Success) { $changes = $m.Groups[1].Value.Trim() }
 }
 

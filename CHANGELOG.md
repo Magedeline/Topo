@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 
 **PCG ▸ Restyle rooms (Ctrl+Shift+G, also on the canvas right-click menu)**
 - Reworks the tiles of rooms you already have instead of generating new ones. Pick rooms (filter by name, e.g. `c-`), and the seleCte model resamples only the tiles near walls, floors and ceilings. Room size, position, border, openings, entities and the spawn stay as they are; new solids continue the tileset next to them.
