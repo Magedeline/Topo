@@ -233,6 +233,49 @@ internal static class SelfTest
 #endif
 
     /// <summary>Room properties defaults, fillers, project manager, presets, Ahorn plugins and third-party Lönn scripts.</summary>
+    /// <summary>
+    /// A 640x360 room with a flag trigger, a camera target trigger switched off by that flag, refills, a dialog NPC and a decal, plus a
+    /// 240-frame camera recording (Lönn Camera Simulator JSON lines) of the player walking right along the floor.
+    /// </summary>
+    internal static (MapBin Map, string Room, string Jsonl) FindCameraFixture()
+    {
+        var map = ProjectManager.NewMap("t/t/t");
+        var l = MapModel.Levels(map).Children[0];
+        l.Set("width", 640); l.Set("height", 360); l.Set("x", 0); l.Set("y", 0);
+        var room = new Room(l);
+        BinElement El(string name, params (string K, object V)[] attrs)
+        {
+            var e = new BinElement(name);
+            foreach (var (k, v) in attrs) e.Set(k, v);
+            return e;
+        }
+        var ents = room.EntitiesEl.Children;
+        ents.Add(El("refill", ("id", 50), ("x", 100), ("y", 100)));
+        ents.Add(El("refill", ("id", 51), ("x", 200), ("y", 100)));
+        ents.Add(El("CEL/Npc", ("id", 52), ("x", 300), ("y", 300), ("dialogId", "CEL_TEST_TALK"), ("onlyIfFlag", "!door_open")));
+        var trigs = room.TriggersEl.Children;
+        trigs.Add(El("everest/flagTrigger", ("id", 53), ("x", 500), ("y", 300), ("width", 16), ("height", 40), ("flag", "door_open"), ("state", true)));
+        var target = El("cameraTargetTrigger", ("id", 54), ("x", 0), ("y", 0), ("width", 640), ("height", 360), ("lerpStrength", 1f),
+                        ("positionMode", "NoEffect"), ("xOnly", false), ("yOnly", false), ("deleteFlag", "door_open"));
+        target.Children.Add(El("node", ("x", 160), ("y", 90)));
+        trigs.Add(target);
+        var decals = room.GetOrAdd("fgdecals").Children;
+        decals.Add(El("decal", ("x", 40), ("y", 40), ("texture", "generic/grass_a"), ("scaleX", 1f), ("scaleY", 1f)));
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($$"""{"t":"header","map":"t/t/t","room":"lvl_{{room.Name}}","flags":[]}""").Append('\n');
+        for (int i = 0; i < 240; i++)
+        {
+            float x = 40 + i * 2.4f, y = 344;
+            float cx = Math.Clamp(x - 160, 0, 320), cy = Math.Clamp(y - 90, 0, 180);
+            sb.Append(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $$"""{"t":"f","i":{{i}},"r":"lvl_{{room.Name}}","x":{{x}},"y":{{y}},"vx":144,"vy":0,"l":{{x - 4}},"tp":{{y - 11}},"rt":{{x + 4}},"bt":{{y}},"st":0,"dt":0.0166667,"cam":[{{cx}},{{cy}}]}""")).Append('\n');
+            if (i == 200) sb.Append("""{"t":"flag","i":200,"set":["door_open"],"clear":[]}""").Append('\n');
+        }
+        sb.Append("""{"t":"end","i":239}""").Append('\n');
+        return (map, room.Name, sb.ToString());
+    }
+
     private static int EditorToolsTest()
     {
         int failed = 0;
@@ -334,6 +377,44 @@ internal static class SelfTest
                 var rroom = new Room(rl);
                 Check("LoennScripts removeAllTiles", rr?.RoomsChanged == 1 && rroom.Grid(true)[0, 22] == '0' && rl.Int("height") == 184 && rl.Child("entities")!.Children[0].Int("y") == 160);
             }
+
+            // Find in map: flags (split, inverted, setter vs reader), dialog keys, names, whole word, room filter
+            var (fmap2, froom, jsonl) = FindCameraFixture();
+            var flagHits = MapSearch.Find(fmap2, "door", new SearchOptions(Field: SearchField.Flags)).ToList();
+            var flags = MapSearch.Flags(fmap2);
+            Check("find flags", flagHits.Count == 3 && flags.Any(f => f.Flag == "door_open" && f.Sets && f.Hit.Name == "everest/flagTrigger")
+                  && flags.Any(f => f.Flag == "door_open" && !f.Sets && f.Hit.Name == "cameraTargetTrigger")
+                  && flags.Any(f => f.Flag == "door_open" && f.Inverted), string.Join("; ", flags.Select(f => $"{f.Flag} {f.Hit.Name} {f.Hit.Field} sets={f.Sets} inv={f.Inverted}")));
+            Check("find dialog / names / whole word / room", MapSearch.Find(fmap2, "", new SearchOptions(Field: SearchField.Dialog)).Single().Value == "CEL_TEST_TALK"
+                  && MapSearch.Find(fmap2, "refill", new SearchOptions(Field: SearchField.Names)).Count() == 2
+                  && !MapSearch.Find(fmap2, "fill", new SearchOptions(Field: SearchField.Names, WholeWord: true)).Any()
+                  && MapSearch.Find(fmap2, "grass", new SearchOptions(SearchKind.Decals)).Count() == 1
+                  && !MapSearch.Find(fmap2, "refill", new SearchOptions(Room: "nope")).Any());
+
+            // camera replay: a recording parsed from JSON lines and simulated against the map
+            var run = CameraRun.Parse(jsonl);
+            var sim = CameraSim.Run(run, fmap2);
+            var last = sim.Frames[199].Camera;
+            Check("camera recording parse", run.Frames.Count == 240 && run.StartRoom == "lvl_" + froom && run.FlagEvents.Count == 1 && run.Frames[5].Camera != null,
+                  $"{run.Frames.Count} frames, room {run.StartRoom}");
+            // the target trigger pulls the camera to its node (anchor 0,0) while the player walks right, until frame 200 sets its deleteFlag
+            Check("camera target trigger anchors the camera", MathF.Abs(last.X) < 4 && MathF.Abs(last.Y) < 4 && sim.Frames[199].ActiveTriggers.Any(t => t.Name == "cameraTargetTrigger")
+                  && sim.Frames[^1].Camera.X > 40, $"{last} then {sim.Frames[^1].Camera}");
+            // with its deleteFlag forced on the trigger is off: the camera follows the player to the room's right edge (640-320)
+            var simOff = CameraSim.Run(run, fmap2, new Dictionary<string, bool> { ["door_open"] = true });
+            var lastOff = simOff.Frames[^1].Camera;
+            Check("camera flag override disables the trigger", MathF.Abs(lastOff.X - 320) < 6 && simOff.Frames[^1].ActiveTriggers.Count == 0, $"{lastOff}");
+            // the recorded flag event (frame 200 sets door_open) is applied on its own
+            Check("camera recorded flags", sim.Flags[199].Contains("door_open") == false && sim.Flags[239].Contains("door_open"));
+            // room offset: cameraOffsetY moves the target down by 32 px per unit (clamped by the room)
+            var froomEl = MapModel.Levels(fmap2).Children[0];
+            froomEl.Child("triggers")!.Children.RemoveAll(t => t.Name == "cameraTargetTrigger");
+            var simPlain = CameraSim.Run(run, fmap2);
+            froomEl.Set("cameraOffsetX", -1f);
+            var simOffset = CameraSim.Run(run, fmap2);
+            float shift = simPlain.Frames[150].Camera.X - simOffset.Frames[150].Camera.X;
+            Check("camera room offset + bounds", MathF.Abs(shift - 48) < 2 && MathF.Abs(simPlain.Frames[^1].Camera.Y - 180) < 2
+                  && simPlain.Frames.All(f => f.Camera.X <= 320.01f), $"shift {shift}, y {simPlain.Frames[^1].Camera.Y}");
         }
         catch (Exception ex) { failed++; Console.WriteLine("EDITOR TOOLS ERROR: " + ex); }
         finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
@@ -469,6 +550,33 @@ internal static class SelfTest
             var vv = Call("view_map", """{"target":"view"}""");
             Check("view_map (map, room) and editor_state", !vm.IsError && vm.Content.Any(c => c?["type"]?.ToString() == "image") && Text(vm).Contains("\"name\":\"a_m\"")
                 && !vr.IsError && Text(vr).Contains("768x496") && Text(es).Contains("\"window\":false") && vv.IsError, Text(vm) + " | " + Text(vr) + " | " + Text(vv));
+
+            // find_in_map / list_flags / camera_recordings / camera_replay on the find+camera fixture
+            var (fmap, froom, jsonl) = FindCameraFixture();
+            var fhost = new HeadlessHost();
+            fhost.Load(fmap);
+            var ftools = new MapTools(fhost);
+            ToolResult FCall(string tool, string json) => ftools.Call(tool, System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject);
+            string runs = Path.Combine(scratch, "Runs");
+            Directory.CreateDirectory(runs);
+            File.WriteAllText(Path.Combine(runs, "run_test.jsonl"), jsonl);
+            File.WriteAllText(Path.Combine(runs, "latest.txt"), "run_test.jsonl");
+            MapTools.CameraRunsDirOverride = runs;
+            try
+            {
+                var fi = FCall("find_in_map", """{"query":"CEL_TEST","field":"dialog"}""");
+                var lf = FCall("list_flags", "{}");
+                var empty = FCall("find_in_map", """{"query":""}""");
+                var cr = FCall("camera_recordings", "{}");
+                var rp = FCall("camera_replay", """{"samples":5}""");
+                var rpo = FCall("camera_replay", """{"flags":{"door_open":true},"samples":0}""");
+                Check("find_in_map / list_flags", !fi.IsError && Text(fi).Contains("\"value\":\"CEL_TEST_TALK\"") && Text(fi).Contains("\"total\":1")
+                      && Text(lf).Contains("\"flag\":\"door_open\"") && Text(lf).Contains("everest/flagTrigger") && empty.IsError, Text(fi) + " | " + Text(lf));
+                Check("camera_recordings / camera_replay", Text(cr).Contains("\"frames\":240") && Text(cr).Contains("\"latest\":true")
+                      && !rp.IsError && Text(rp).Contains("cameraTargetTrigger") && Text(rp).Contains($"\"room\":\"{froom}\"") && !rpo.IsError
+                      && !Text(rpo).Contains("cameraTargetTrigger#"), Text(cr) + " | " + Text(rp) + " | " + Text(rpo));
+            }
+            finally { MapTools.CameraRunsDirOverride = null; }
         }
         catch (Exception ex) { failed++; Console.WriteLine("DESIGN ERROR: " + ex); }
         finally

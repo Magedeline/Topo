@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.0
+
+**Edit ▸ Find in map (Alt+F)**, inspired by OldmanG's [Lönn Searcher](https://gamebanana.com/tools/25016)
+- Find placed entities, triggers, decals and rooms by type, texture, room name or any attribute, and jump to the result (Enter or double-click; F3 / Shift+F3 step through results).
+- *Match* can be limited to names, attribute values, **flags** (flag attributes split into single flags, `!` handled) or **dialog keys**. Leave the box empty with Flags or Dialog keys to list them all. *Edit ▸ List flags in map…* opens it on Flags.
+- Whole word, match case and current-room-only options.
+
+**View ▸ Camera replay (Ctrl+Shift+C)**, for recordings from rifs's [Lönn Camera Simulator](https://gamebanana.com/tools/25020)
+- Install that mod and press F8 in a level to record. Topo reads the recordings from `Celeste/ModFiles/CameraSim/Runs` and plays them over the map: player trail, hitbox, the game's camera, and active triggers. Pick a recording or follow the latest as it is written.
+- Topo also simulates the camera for the map **as it is now**, using Celeste's camera rules: room bounds and camera offset, `cameraOffsetTrigger`, `cameraTargetTrigger`, `cameraAdvanceTargetTrigger`, `everest/smoothCameraOffsetTrigger`, killbox lower bound and the red-dash/feather/summit leads. Edit a trigger and the simulated camera updates at once, with no need to go back into the game. The window shows how far it is from the recorded camera.
+- Force flags on or off to try flag-controlled cameras (`deleteFlag`). MaxHelpingHand camera triggers are listed as not simulated.
+- Both tools are Topo's own code. Nothing from either plugin is bundled, and Topo only reads the recording files.
+
+**AI edition:** new agent tools `find_in_map`, `list_flags` (who sets and who reads each flag, and flags read but never set), `camera_recordings` and `camera_replay` (replays a recording against the edited map and reports per-room differences from the recorded camera).
+
 ## 1.3.0
 
 **PCG ▸ Restyle rooms (Ctrl+Shift+G, also on the canvas right-click menu)**

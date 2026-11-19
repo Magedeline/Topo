@@ -88,6 +88,9 @@ public sealed partial class MapTools
         "Media: list_media finds the mod's images/audio/video; view_image shows sprites, GIFs, folders or animation frame sequences with pixel statistics; " +
         "compare_images diffs two images; analyze_audio and analyze_video return figures and statistics (and optionally the audio itself). " +
         "Paths are absolute or relative to the mod folder (also tried under Graphics/Atlases/Gameplay, Graphics, Audio). " +
+        "FIND: find_in_map searches entities/triggers/decals/rooms by name, attribute, flag or dialog key (like the editor's Alt+F); list_flags shows who sets " +
+        "and who reads each session flag. CAMERA: camera_recordings lists in-game recordings (Lönn Camera Simulator mod, F8 in game) and camera_replay " +
+        "re-plays one against the map as it is now, so you can tune camera triggers and see the new camera without the game. " +
         "Prompts: build_map (strongest-effort whole-level workflow), design_level, pcg_level, fix_room, review_difficulty, polish_map.";
 
     private readonly IMapHost _host;
@@ -251,6 +254,7 @@ public sealed partial class MapTools
         RegisterReference();
         RegisterMedia();
         RegisterCredits();
+        RegisterFind();
     }
 
     // ---- args ----

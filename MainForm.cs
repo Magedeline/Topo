@@ -113,6 +113,11 @@ public sealed partial class MainForm : Form
         edit.DropDownItems.Add(new ToolStripMenuItem("Flip &horizontally", null, (_, _) => FlipSelected(true)) { ShortcutKeyDisplayString = "H" });
         edit.DropDownItems.Add(new ToolStripMenuItem("Flip &vertically", null, (_, _) => FlipSelected(false)) { ShortcutKeyDisplayString = "Shift+H" });
         edit.DropDownItems.Add(new ToolStripMenuItem("Add &node", null, (_, _) => AddNode()) { ShortcutKeyDisplayString = "N" });
+        edit.DropDownItems.Add(new ToolStripSeparator());
+        edit.DropDownItems.Add(new ToolStripMenuItem("&Find in map…", null, (_, _) => ShowFind(null), Keys.Alt | Keys.F));
+        edit.DropDownItems.Add(new ToolStripMenuItem("Find ne&xt", null, (_, _) => FindStep(1), Keys.F3));
+        edit.DropDownItems.Add(new ToolStripMenuItem("Find pre&vious", null, (_, _) => FindStep(-1), Keys.Shift | Keys.F3));
+        edit.DropDownItems.Add(new ToolStripMenuItem("List &flags in map…", null, (_, _) => ShowFind(SearchField.Flags)));
 
         var roomMenu = new ToolStripMenuItem("&Room");
         roomMenu.DropDownItems.Add(new ToolStripMenuItem("&New room…", null, (_, _) => NewRoom(null), Keys.Control | Keys.N));
@@ -144,6 +149,8 @@ public sealed partial class MainForm : Form
         view.DropDownItems.Add(new ToolStripMenuItem("Zoom &out", null, (_, _) => _canvas.SetZoom(_canvas.Zoom * 0.8f), Keys.Control | Keys.OemMinus));
         view.DropDownItems.Add(new ToolStripMenuItem("Zoom &100%", null, (_, _) => _canvas.SetZoom(1f), Keys.Control | Keys.D1));
         view.DropDownItems.Add(new ToolStripMenuItem("Re&load tilesets && sprites", null, (_, _) => ReloadAssets()));
+        view.DropDownItems.Add(new ToolStripSeparator());
+        view.DropDownItems.Add(new ToolStripMenuItem("&Camera replay…", null, (_, _) => ShowCameraReplay(), Keys.Control | Keys.Shift | Keys.C));
         view.DropDownItems.Add(new ToolStripSeparator());
         view.DropDownItems.Add(BuildThemeMenu());
 
@@ -720,6 +727,7 @@ public sealed partial class MainForm : Form
         _canvas.Fillers = Fillers.Rects(_map);
         _canvas.SetRooms(rooms, keepView);
         RefreshRoomList();
+        _cameraForm?.MapChanged();   // undo, open, room add/remove: the replay follows the map as it is now
     }
 
     private bool _suppressListFocus;

@@ -44,6 +44,8 @@ public sealed partial class MapCanvas : Control
     public List<Rectangle> Fillers = new(); // map filler rectangles (world pixels)
     public bool ShowFillers = true;
     public PointF? PlayerWorld;
+    /// <summary>Extra drawing in world pixels on top of the map (camera replay); the graphics are already zoomed.</summary>
+    public Action<Graphics>? WorldOverlay;
     public bool ShowBg = true, ShowEntities = true, ShowTriggers = true, ShowLabels = true, ShowMinimap = true;
     private bool _showFgDecals = true, _showBgDecals = true;
     public bool ShowFgDecals { get => _showFgDecals; set { _showFgDecals = value; RerenderAll(); } }
@@ -869,6 +871,8 @@ public sealed partial class MapCanvas : Control
             }
             if (SelectedItems.Count == 1 && Selected is { El: not null, IsNode: false, Decal: false } one) DrawResizeHandles(g, one);
         }
+
+        WorldOverlay?.Invoke(g);
 
         if (PlayerWorld is PointF p)
         {
