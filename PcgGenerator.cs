@@ -19,6 +19,8 @@ public sealed class PcgOptions
     public string Model = "pe_d5_full";
     public string Background = "none";
     public string Solid = "1";
+    /// <summary>Room-by-room shape (<see cref="PcgLayouts"/>); "random" = seleCte's own tree.</summary>
+    public string Layout = "random";
 
     public PcgOptions Clone() => (PcgOptions)MemberwiseClone();
 }
@@ -257,6 +259,8 @@ public sealed class PcgGenerator
             case JsonValue v:
                 if (v.TryGetValue(out bool b)) return DynValue.NewBoolean(b);
                 if (v.TryGetValue(out double d)) return DynValue.NewNumber(d);
+                if (v.TryGetValue(out int i)) return DynValue.NewNumber(i); // JsonValues built from ints don't read back as double
+                if (v.TryGetValue(out long l)) return DynValue.NewNumber(l);
                 return DynValue.NewString(v.ToString());
             default: return DynValue.NewString(node.ToJsonString());
         }
@@ -309,11 +313,25 @@ public sealed class PcgGenerator
             ["model"] = o.Model,
             ["background"] = o.Background == "none" ? "" : o.Background,
             ["solid"] = o.Solid,
+            ["layout"] = PcgLayouts.Normalize(o.Layout),
         })
             opts[kv.Key] = kv.Value;
         script.Globals["__opts"] = opts;
         script.Globals["__customFg"] = Models.Contains(o.Model) ? DynValue.Nil : LoadCustomDpe(script, o.Model, "fg");
         script.Globals["__customBg"] = o.Background == "none" || Backgrounds.Contains(o.Background) ? DynValue.Nil : LoadCustomDpe(script, o.Background, "bg");
+
+        script.Globals["__layoutFor"] = DynValue.NewCallback((_, args) =>
+        {
+            string layout = PcgLayouts.Normalize(o.Layout), seed = args[0].ToPrintString();
+            var rng = new Random(PcgLayouts.StableSeed(seed + "|" + layout));
+            var plan = PcgLayouts.Build(layout, o.NbRooms, o.Proba, rng);
+            log($"Layout {layout}: {plan.Rooms.Count} rooms, {plan.Links.Count} openings (S = spawn, E = end)\n{PcgLayouts.Sketch(plan)}");
+            var (data, order) = PcgLayouts.ToSkeleton(plan, o.RoomW, o.RoomH, rng);
+            var t = new Table(script);
+            t["data"] = ToLua(script, data);
+            t["order"] = ToLua(script, order);
+            return DynValue.NewTable(t);
+        });
 
         const string flow = @"
 local o = __opts
@@ -323,6 +341,18 @@ local level = require('library.selecte.level')
 local encoder = require('library.selecte.encoder')
 
 local rng = Rng.new(o.seed)
+if o.layout ~= 'random' then
+  -- a room-by-room shape replaces seleCte's random tree; a fresh copy per (re)draw since rooms get filled in place
+  local skeletonLib = require('library.selecte.skeleton')
+  local plan = __layoutFor(tostring(rng.seed))
+  local function copy(t)
+    if type(t) ~= 'table' then return t end
+    local r = {}
+    for k, v in pairs(t) do r[k] = copy(v) end
+    return r
+  end
+  skeletonLib.generateCeleskeleton = function() return skeletonLib.fromJsonTable(copy(plan.data), copy(plan.order)) end
+end
 local dpe = __customFg or dpeData[o.model]
 if not dpe then error('unknown model ' .. tostring(o.model)) end
 local bgDpe = nil
@@ -331,8 +361,8 @@ if o.background ~= '' then
   if not bgDpe then error('unknown background model ' .. tostring(o.background)) end
 end
 
-__log(string.format('seleCte: seed %q, %d rooms of %dx%d, proba %.2f, model %s, background %s',
-  tostring(rng.seed), o.nbRooms, o.roomW, o.roomH, o.proba, o.model, o.background ~= '' and o.background or 'none'))
+__log(string.format('seleCte: seed %q, %d rooms of %dx%d, layout %s, proba %.2f, model %s, background %s',
+  tostring(rng.seed), o.nbRooms, o.roomW, o.roomH, o.layout, o.proba, o.model, o.background ~= '' and o.background or 'none'))
 
 local skeleton, route, summary = level.generate(dpe, {
   nbRooms = o.nbRooms, proba = o.proba, roomSize = { o.roomW, o.roomH },

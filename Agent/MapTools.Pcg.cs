@@ -12,6 +12,15 @@ public sealed partial class MapTools
     private readonly Dictionary<string, PcgCandidate> _pcgResults = new();
     private string? _pcgLastId;
 
+    private static string Layout(string? requested)
+    {
+        if (string.IsNullOrWhiteSpace(requested)) return "random";
+        string id = PcgLayouts.Normalize(requested);
+        if (id == "random" && !requested.Trim().Equals("random", StringComparison.OrdinalIgnoreCase))
+            throw new ToolException($"Unknown layout '{requested}'. Use one of: {string.Join(", ", PcgLayouts.All.Select(l => l.Id))}.");
+        return id;
+    }
+
     private void RegisterPcg()
     {
         Add("pcg_models", "Procedural generation (PCGHelper seleCte): is it available, which Markov models exist (shipped vanilla ones and custom models " +
@@ -23,7 +32,11 @@ public sealed partial class MapTools
             Props(("seed", P("string", "Seed (blank = random; reported back).")),
                   ("rooms", P("integer", "Rooms to generate (default 7, max 60).")),
                   ("room_w", P("integer", "Room width in tiles (default 40).")), ("room_h", P("integer", "Room height in tiles (default 23).")),
-                  ("proba", P("number", "Branching probability 0..1 (0 = corridor, 1 = labyrinth; default 0.3).")),
+                  ("proba", P("number", "Branching probability 0..1 (0 = corridor, 1 = labyrinth; default 0.3). Used by layout random and organic.")),
+                  ("layout", P("string", "Room-by-room shape: " + string.Join(", ", PcgLayouts.All.Select(l => l.Id)) + " (default random = seleCte's own tree). " +
+                      "linear: a straight run; shortcut: main run plus a side route that rejoins it; branched_end / branched_start: two or three branches " +
+                      "at the end / start; folded: out and back on the row below; accordion: a snake of rows; origami: mixed tall/wide rooms folding around; " +
+                      "organic: mixed-size web with loops and dead ends.")),
                   ("model", P("string", "Foreground model (pcg_models; default pe_d5_full = all vanilla rooms).")),
                   ("background", P("string", "Background model or 'none' (default none).")),
                   ("solid", P("string", "Tileset glyph drawn for solids (default '1' dirt).")),
@@ -108,6 +121,7 @@ public sealed partial class MapTools
             try { o["solid_tilesets"] = new JsonArray(Pcg().SolidTilesets().Select(t => (JsonNode)$"{t.Glyph} = {t.Name}").ToArray()); }
             catch (Exception ex) { o["solid_tilesets_error"] = ex.Message; }
         }
+        o["layouts"] = new JsonArray(PcgLayouts.All.Select(l => (JsonNode)$"{l.Id}: {l.Hint}").ToArray());
         o["mechanics"] = new JsonArray(PcgPipeline.Mechanics.Select(m => (JsonNode)$"{m.Label}: {string.Join(", ", m.Names)}").ToArray());
         o["tier_hazard_pressure_targets"] = new JsonObject(Enumerable.Range(1, 5).Select(t => KeyValuePair.Create(ReferenceMaps.TierNames[t].ToLowerInvariant(), (JsonNode?)PcgPipeline.TierPressure[t])));
         o["custom_models_dir"] = PcgGenerator.CustomModelsDir;
@@ -132,6 +146,7 @@ public sealed partial class MapTools
                 TriesLimit = Math.Clamp(I(a, "tries") ?? 10, 1, 100),
                 BtDepth = Math.Clamp(I(a, "bt_depth") ?? 0, 0, 10),
                 ResetSkeleton = B(a, "reset_skeleton"),
+                Layout = Layout(S(a, "layout")),
             },
             Candidates = Math.Clamp(I(a, "candidates") ?? 1, 1, 24),
             Repair = B(a, "repair", true),

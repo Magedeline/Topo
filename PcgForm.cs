@@ -28,6 +28,9 @@ public sealed class PcgForm : Form
     private readonly ComboBox _model = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _bg = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _solid = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+    private readonly ComboBox _layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+    private readonly Label _layoutHint = new() { AutoSize = true, MaximumSize = new Size(600, 0), ForeColor = SystemColors.GrayText };
+    private readonly ToolTip _tips = new();
     private readonly ComboBox _tier = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly CheckedListBox _mechanics = new() { CheckOnClick = true, MultiColumn = true, ColumnWidth = 118, Height = 56, Width = 600, BorderStyle = BorderStyle.FixedSingle };
     private readonly TextBox _prefix = new() { Text = "pcg_", Width = 80 };
@@ -66,7 +69,13 @@ public sealed class PcgForm : Form
         Row("Background model", _bg, "Tries per room", _tries);
         Row("Solid tileset", _solid, "Backtrack depth", _bt);
         Row("Target tier", _tier, "Candidates (best of)", _candidates);
-        Row("Room name prefix", _prefix, "", _reset);
+        Row("Layout (room by room)", _layout, "Room name prefix", _prefix);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true });
+        grid.Controls.Add(_layoutHint);
+        grid.SetColumnSpan(_layoutHint, 3);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true });
+        grid.Controls.Add(_reset);
+        grid.SetColumnSpan(_reset, 3);
         grid.Controls.Add(new Label { Text = "Mechanics allowed", AutoSize = true, Anchor = AnchorStyles.Left });
         grid.Controls.Add(_mechanics);
         grid.SetColumnSpan(_mechanics, 3);
@@ -81,6 +90,16 @@ public sealed class PcgForm : Form
         Controls.Add(buttons);
         Controls.Add(grid);
 
+        foreach (var (_, label, _) in PcgLayouts.All) _layout.Items.Add(label);
+        _layout.SelectedIndexChanged += (_, _) =>
+        {
+            string id = PcgLayouts.All[Math.Max(0, _layout.SelectedIndex)].Id;
+            _layoutHint.Text = PcgLayouts.All[Math.Max(0, _layout.SelectedIndex)].Hint;
+            _proba.Enabled = id is "random" or "organic"; // the other shapes are fixed
+        };
+        _layout.SelectedIndex = 0;
+        _tips.SetToolTip(_layout, "The shape the rooms are laid out in, after the classic level-design chart. Every shape keeps one spawn and one heart; " +
+            "extra branch ends and side routes are optional rooms.");
         _tier.Items.Add("any");
         for (int t = 1; t <= 5; t++) _tier.Items.Add(ReferenceMaps.TierNames[t]);
         _tier.SelectedIndex = 0;
@@ -149,6 +168,7 @@ public sealed class PcgForm : Form
                 Model = (string)_model.SelectedItem!,
                 Background = (string)_bg.SelectedItem!,
                 Solid = ((string)_solid.SelectedItem!).Split(' ')[0],
+                Layout = PcgLayouts.All[Math.Max(0, _layout.SelectedIndex)].Id,
             },
             Candidates = (int)_candidates.Value,
             Repair = _repair.Checked,

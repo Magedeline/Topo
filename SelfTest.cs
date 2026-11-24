@@ -643,6 +643,25 @@ internal static class SelfTest
             Console.WriteLine("deterministic for same seed: " + same);
             if (!same) failed++;
 
+            // room-by-room layouts: each shape builds a connected skeleton seleCte accepts, no overlapping rooms, deterministic
+            foreach (var (id, _, _) in PcgLayouts.All.Where(l => l.Id != "random"))
+                foreach (int n in new[] { 3, 7, 12 })
+                {
+                    try
+                    {
+                        var lo = new PcgOptions { Seed = "layout", NbRooms = n, Layout = id, TriesLimit = 2 };
+                        var lr = gen.Generate(lo, _ => { });
+                        var lr2 = gen.Generate(lo, _ => { });
+                        var rects = lr.Rooms.Select(r => new System.Drawing.Rectangle(r.X, r.Y, r.W, r.H)).ToList();
+                        bool overlap = rects.Where((r, i) => rects.Skip(i + 1).Any(q => q.IntersectsWith(r))).Any();
+                        bool sameLayout = lr.Rooms.Count == lr2.Rooms.Count && lr.Rooms.Zip(lr2.Rooms).All(q => q.First.X == q.Second.X && q.First.Y == q.Second.Y && q.First.Fg.SequenceEqual(q.Second.Fg));
+                        bool layoutOk = lr.Rooms.Count >= Math.Min(n, 2) && lr.Route.Count >= 1 && !overlap && sameLayout;
+                        Console.WriteLine($"layout {id} n={n}: {lr.Rooms.Count} rooms, route {lr.Route.Count}, playable={lr.AllPlayable}{(overlap ? " OVERLAP" : "")}{(sameLayout ? "" : " NOT DETERMINISTIC")}");
+                        if (!layoutOk) failed++;
+                    }
+                    catch (Exception ex) { Console.WriteLine($"layout {id} n={n} FAILED: {ex.Message}"); failed++; }
+                }
+
             string sample = Directory.EnumerateFiles(maps, "*.bin", SearchOption.AllDirectories).First();
             var host = MapBin.Load(sample);
             int before = MapModel.Levels(host).Children.Count;

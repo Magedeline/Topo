@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+**PCG ▸ Generate rooms: Layout (room by room)**
+- Pick the shape the generated rooms are laid out in, after the classic level-design chart: *Linear*, *Alternate path (shortcut)*, *Branched end*, *Branched start*, *Folded*, *Accordion*, *Origami* (mixed tall and wide rooms folding around) and *Pure organic* (mixed sizes with branches, loops and dead ends). *Random tree* is seleCte's own skeleton, as before.
+- Each shape still has one spawn and one crystal heart on the main route, and that route gets the usual playability checks. Side routes and extra branch ends are optional rooms for strawberries or secrets. The log draws the shape (S = spawn, E = end).
+- Same seed, same layout. The branch probability only applies to *Random tree* and *Pure organic*.
+
+**AI edition:** `pcg_generate` takes `layout`, and `pcg_models` lists the layouts.
+
 ## 1.4.0
 
 **Edit ▸ Find in map (Alt+F)**, inspired by OldmanG's [Lönn Searcher](https://gamebanana.com/tools/25016)
