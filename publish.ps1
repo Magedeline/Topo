@@ -65,6 +65,11 @@ foreach ($f in $flavors) {
 	# (dotnet publish has no --no-incremental switch; clearing the Release objects does the same).
 	$objRelease = Join-Path $here 'obj\Release'
 	if (Test-Path $objRelease) { Remove-Item $objRelease -Recurse -Force }
+	# dotnet publish first builds into bin\Release\net8.0-windows\win-x64. A self-contained flavor copies
+	# the whole runtime there (hostfxr.dll, coreclr.dll, ...) and a later framework-dependent flavor does not
+	# remove it, leaving a "half self-contained" Topo.exe that looks for .NET inside its own folder.
+	$binRid = Join-Path $here 'bin\Release\net8.0-windows\win-x64'
+	if (Test-Path $binRid) { Remove-Item $binRid -Recurse -Force }
 	dotnet publish $proj -c Release -r win-x64 --self-contained $f.SelfContained `
 		-p:PublishSingleFile=true -p:Version=$Version -p:TopoAi=$($f.Ai) -o $stage -nologo
 	if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($f.Name)" }

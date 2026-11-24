@@ -53,4 +53,15 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!--
+    A framework-dependent build with a RuntimeIdentifier (e.g. `dotnet build -c Release -r win-x64`) shares its
+    output folder with self-contained builds/publishes, and MSBuild never deletes the runtime files those left
+    behind. If hostfxr.dll sits next to Topo.exe, the apphost runs in self-contained mode and fails with
+    ".NET not found" (it looks for Microsoft.NETCore.App inside the app folder). Remove the stale host files.
+  -->
+  <Target Name="RemoveStaleSelfContainedHost" AfterTargets="Build"
+          Condition="'$(SelfContained)' != 'true' and '$(RuntimeIdentifier)' != ''">
+    <Delete Files="$(OutDir)hostfxr.dll;$(OutDir)hostpolicy.dll" ContinueOnError="true" />
+  </Target>
+
 </Project>
